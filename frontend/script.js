@@ -1,6 +1,18 @@
-// const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "http://127.0.0.1:8000";
+const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (!isLocal) {
+            // Live domain (Vercel) -> Always use current site origin
+            return window.location.origin;
+        }
+        if (window.BACKEND_URL) return window.BACKEND_URL;
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('BACKEND_URL') : null;
+        if (stored) return stored;
+    }
+    return 'http://127.0.0.1:8000';
+};
+const BACKEND_URL = getBackendUrl();
 
-const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "https://asad0978.pythonanywhere.com";
 
 // Modals Triggering
 const authModal = document.getElementById('authModal');
@@ -707,8 +719,7 @@ async function generateCodeExplanation() {
     };
 
     try {
-        const backendPort = "8000"; 
-        const response = await fetch(`http://127.0.0.1:${backendPort}/api/explain-code`, {
+        const response = await fetch(`${BACKEND_URL}/api/explain-code`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

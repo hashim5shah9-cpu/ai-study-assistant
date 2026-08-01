@@ -28,6 +28,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    return {"status": "online", "message": "Backend server is live and working!"}
+
+
 # ====================================================
 # CRITICAL: API KEYS CONFIGURATION (LOAD FROM ENV)
 # ====================================================
