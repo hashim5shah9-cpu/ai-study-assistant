@@ -19,11 +19,12 @@ from google.genai import types
 
 app = FastAPI()
 
+# 👇 Yeh CORS Middleware setup add karein
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Har frontend (Live Server + Vercel) ko allow karega
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["*"],  # All methods (GET, POST, etc.)
     allow_headers=["*"],
 )
 
