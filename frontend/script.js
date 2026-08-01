@@ -1,4 +1,6 @@
-const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "http://127.0.0.1:8000";
+// const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "http://127.0.0.1:8000";
+
+const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "https://asad0978.pythonanywhere.com";
 
 // Modals Triggering
 const authModal = document.getElementById('authModal');
