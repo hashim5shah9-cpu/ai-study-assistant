@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - AI Study Assistant</title>
+        <link rel="icon"
+            href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body class="dashboard-body">
+
+        <!-- <aside class="sidebar">
+            <div>
+                <div class="sidebar-brand">Asad.ai</div>
+                <ul class="sidebar-menu">
+                    <li class="menu-item active" data-target="chatPanel">AI
+                        Study Chat</li>
+                    <li class="menu-item" data-target="summaryPanel">Text
+                        Summarizer</li>
+                    <li class="menu-item" data-target="quizPanel">Quiz
+                        Generator</li>
+                    <li class="menu-item"
+                        data-target="multiuploadPanel">Multi-Upload</li>
+                    <li class="menu-item" data-target="Codeexplainpanel">Code
+                        Explainer</li>
+                    <li class="menu-item" data-target="imagetotextpanel"
+                        onclick="switchPanel('imagetotextpanel')">
+                        🖼️ Image to Text
+                    </li>
+                </ul>
+            </div>
+
+            <div style="flex-grow: 1;"></div>
+
+            <div>
+                <div
+                    style="display: flex; align-items: center; gap: 10px; padding: 8px 5px 4px 5px; border-top: 1px solid #e2e8f0; margin-bottom: 12px;">
+                    <div id="userAvatarSlot"
+                        style="width: 34px; height: 34px; background: #3b82f6; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.95rem; flex-shrink: 0;">
+                        U
+                    </div>
+                    <div
+                        style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.1;">
+                        <h4 id="sidebarUserName"
+                            style="margin: 0; font-size: 0.85rem; color: white; font-weight: 600;">User
+                            Name</h4>
+                        <span id="sidebarUserEmail"
+                            style="font-size: 0.72rem; color: white; display: block; margin-top: 1px;">user@email.com</span>
+                    </div>
+                </div>
+                <button class="btn-logout" id="logoutBtn">Logout</button>
+            </div>
+        </aside> -->
+
+        <aside class="sidebar">
+            <div>
+                <div class="sidebar-brand">Asad.ai</div>
+                <ul class="sidebar-menu">
+                    <li class="menu-item active" data-target="chatPanel">AI
+                        Study Chat</li>
+                    <li class="menu-item" data-target="summaryPanel">Text
+                        Summarizer</li>
+                    <li class="menu-item" data-target="quizPanel">Quiz
+                        Generator</li>
+                    <li class="menu-item"
+                        data-target="multiuploadPanel">Multi-Upload</li>
+                    <li class="menu-item" data-target="Codeexplainpanel">Code
+                        Explainer</li>
+                    <!-- Removed inline onclick to fix the conflict -->
+                    <li class="menu-item" data-target="imagetotextpanel">🖼️
+                        Image to Text</li>
+                </ul>
+            </div>
+
+            <div style="flex-grow: 1;"></div>
+
+            <div>
+                <div
+                    style="display: flex; align-items: center; gap: 10px; padding: 8px 5px 4px 5px; border-top: 1px solid #e2e8f0; margin-bottom: 12px;">
+                    <div id="userAvatarSlot"
+                        style="width: 34px; height: 34px; background: #3b82f6; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.95rem; flex-shrink: 0;">
+                        U
+                    </div>
+                    <div
+                        style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.1;">
+                        <h4 id="sidebarUserName"
+                            style="margin: 0; font-size: 0.85rem; color: white; font-weight: 600;">User
+                            Name</h4>
+                        <span id="sidebarUserEmail"
+                            style="font-size: 0.72rem; color: white; display: block; margin-top: 1px;">user@email.com</span>
+                    </div>
+                </div>
+                <button class="btn-logout" id="logoutBtn">Logout</button>
+            </div>
+        </aside>
+
+        <main class="dashboard-content">
+
+            <!-- AI STUDY CHAT  -->
+
+            <section class="feature-panel active" id="chatPanel">
+                <h2>AI Study Chat</h2>
+                <p class="panel-desc">AI: Assalam-o-Alaikum! Main aapka Study
+                    Assistant hoon. Aaj kya seekhna hai?</p>
+
+                <div class="chat-container">
+                    <div class="chat-display-box" id="chatBox">
+                    </div>
+                    <form class="chat-input-area" id="chatForm">
+                        <input type="text" id="chatInput"
+                            placeholder="Ask anything about your study topic..."
+                            required>
+                        <button type="submit" id="sendChatBtn">Send</button>
+                    </form>
+                    <div id="chatBox"></div>
+                </div>
+            </section>
+
+            <!-- FEATURE 2: TEXT SUMMARIZER -->
+            <section class="feature-panel" id="summaryPanel">
+                <h2>Text Summarizer</h2>
+                <p class="panel-desc">Apni .txt, .pdf, ya .ppt file select
+                    karein aur behtareen simple summary haasil karein.</p>
+
+                <div style="margin-bottom: 20px;">
+                    <input type="file" id="summaryFileInput"
+                        accept=".txt, .pdf, .ppt, .pptx"
+                        style="padding: 10px; border: 1px solid #ccc; border-radius: 5px; background: white;">
+                    <button class="btn-feature-action" id="summarizeBtn"
+                        style="margin-left: 10px;">Summarize File</button>
+                </div>
+
+                <div class="result-box" id="summaryResult"
+                    style="padding: 15px; background: #fafafa; border: 1px solid #ddd; border-radius: 8px; min-height: 100px; line-height: 1.6;">
+                    Summary yahan show hogi...
+                </div>
+            </section>
+
+            <!-- QUIZ GENERATOR  -->
+
+            <section class="feature-panel" id="quizPanel">
+                <h2>Quiz Generator</h2>
+                <p class="panel-desc">Apna topic likhein (e.g., Physics,
+                    Computer Networks) taake AI aapke liye MCQs quiz taiyar
+                    kare.</p>
+
+                <div class="quiz-input-group">
+                    <input type="text" id="quizTopicInput"
+                        placeholder="Enter topic name...">
+                    <button class="btn-feature-action" id="quizBtn">Generate
+                        Quiz</button>
+                </div>
+
+                <div class="result-box" id="quizResult">
+                    Quiz questions yahan show honge...
+                </div>
+            </section>
+
+            <!-- ====================================================
+            MULTI-UPLOAD MAIN PANEL SECTION WITH DYNAMIC WRAPPER
+            ==================================================== -->
+            <section id="multiuploadPanel" class="feature-panel">
+                <div class="dash-upload-container">
+                    <!-- Main Section Header -->
+                    <h2
+                        style="margin-bottom: 20px; color: #1e293b; font-family: sans-serif;">Multi-Upload
+                        Doc Engine</h2>
+
+                    <!-- Only Multi-Upload Dropzone Box -->
+                    <div class="dash-dropzone multi-border"
+                        onclick="document.getElementById('dashMultiFile').click()">
+                        <div class="zone-icon">📂</div>
+                        <p>Upload Multiple Files <br><span>Select chapters,
+                                notes, or multiple PDFs together</span></p>
+                        <input type="file" id="dashMultiFile" multiple
+                            style="display: none;"
+                            onchange="handleDashMultiSelect(this)">
+                    </div>
+
+                    <!-- Selected Files List Rendering -->
+                    <div id="dashFilesList" class="dash-selected-files"></div>
+
+                    <!-- Action Button Control Block -->
+                    <div id="summaryActionBlock"
+                        style="display: none; text-align: center; margin-top: 25px;">
+                        <button type="button" class="btn-summarize-multi"
+                            onclick="generateMultiSummary()">
+                            ✨ Summarize All Uploaded Docs
+                        </button>
+                    </div>
+
+                    <!-- 👇 MAIN FIX: Dynamic response placeholder jahan one-by-one sab cards load honge -->
+                    <div id="dynamicSummaryCardsWrapper"
+                        style="margin-top: 30px; display: flex; flex-direction: column; gap: 20px;"></div>
+                </div>
+            </section>
+
+            <!-- code explainer  -->
+
+            <section id="Codeexplainpanel" class="feature-panel"
+                style="display: none;">
+                <div class="code-explainer-card"
+                    style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); font-family: sans-serif; text-align: left;">
+
+                    <h3
+                        style="margin-top: 0; color: #1e293b; font-size: 1.25rem; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                        💻 AI Code Explainer
+                    </h3>
+                    <p
+                        style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">
+                        Paste your code below to get a highly detailed
+                        line-by-line explanation from AI.
+                    </p>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <select id="codeLanguageSelect"
+                            style="padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none; background: #f8fafc; font-size: 0.9rem; cursor: pointer;">
+                            <option value="auto">Detect Language
+                                Automatically</option>
+                            <option value="C++">C++</option>
+                            <option value="Python">Python</option>
+                            <option value="JavaScript">JavaScript</option>
+                            <option value="SQL">SQL</option>
+                            <option value="Java">Java</option>
+                            <option value="HTML/CSS">HTML/CSS</option>
+                        </select>
+                    </div>
+
+                    <textarea id="rawCodeInput"
+                        placeholder="// Paste your code here..."
+                        style="width: 100%; min-height: 200px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; padding: 15px; border-radius: 6px; border: 1px solid #cbd5e1; outline: none; resize: vertical; margin-bottom: 15px; background: #fafafa; color: #1e293b; box-sizing: border-box;"></textarea>
+
+                    <button onclick="generateCodeExplanation()"
+                        style="background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s; font-size: 0.95rem;">
+                        ✨ Explain Code
+                    </button>
+
+                    <div id="codeExplanationOutputBlock"
+                        style="display: none; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+
+                            <div
+                                style="display: flex; align-items: center; gap: 10px;">
+                                <h4
+                                    style="margin: 0; color: #1e293b; font-size: 1.1rem; font-weight: bold;">🤖
+                                    AI Explanation Result</h4>
+                                <span id="code-status-badge"
+                                    style="color: #2563eb; font-size: 0.8rem; background: #dbeafe; padding: 4px 10px; border-radius: 6px; font-weight: bold;">✍
+                                    AI Typing...</span>
+                            </div>
+
+                            <div
+                                style="display: flex; align-items: center; gap: 8px;">
+                                <span
+                                    style="font-size: 0.85rem; color: #64748b; font-weight: 500;">Convert
+                                    Explanation To:</span>
+                                <select id="explanationLanguageSelect"
+                                    onchange="generateCodeExplanation()"
+                                    style="padding: 6px 10px; border-radius: 6px; border: 1px solid #f472b6; outline: none; background: #fdf2f8; font-size: 0.85rem; cursor: pointer; font-weight: bold; color: #db2777;">
+                                    <option value="Roman Urdu/Hindi">Roman
+                                        Urdu/Hindi (Aasan Urdu)</option>
+                                    <option value="English">English</option>
+                                    <option value="Urdu Script">Urdu (اردو رسم
+                                        الخط)</option>
+                                </select>
+                            </div>
+
+                        </div>
+
+                        <div id="code-ai-response-text"
+                            class="markdown-output-content"
+                            style="color: #334155; font-size: 0.98rem; line-height: 1.6; border-left: 3px solid #2563eb; padding-left: 15px; background: #fafafa; padding-top: 15px; padding-bottom: 15px; border-radius: 0 6px 6px 0; text-align: justify; min-height: 60px;">
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- IMAGE TO TEXT CODE EXPLAINER  -->
+
+            <section id="imagetotextpanel" class="feature-panel"
+                style="display: none;">
+                <div id="ImageExplainPanel"
+                    class="image-to-text-card dashboard-panel">
+
+                    <div class="panel-header">
+                        <h2>🖼️ AI Image & Diagram Explainer</h2>
+                        <p>Upload any diagram, handwritten notes, flowchart, or
+                            assignment screenshot for an in-depth AI
+                            breakdown.</p>
+                    </div>
+
+                    <div class="card-box">
+                        <div class="image-upload-wrapper">
+
+                            <!-- Drag and Drop Dropzone -->
+                            <div class="dropzone" id="imageDropzone">
+                                <input type="file" id="imageFileInput"
+                                    accept="image/*" style="display: none;"
+                                    onchange="handleImagePreview(event)">
+
+                                <div class="dropzone-content"
+                                    id="dropzonePrompt">
+                                    <span class="upload-icon">📁</span>
+                                    <p><strong>Click to upload</strong> or drag
+                                        & drop image here</p>
+                                    <span class="file-types">PNG, JPG, JPEG,
+                                        WEBP, GIF (Max 10MB)</span>
+                                </div>
+
+                                <!-- Image Preview Area -->
+                                <div id="imagePreviewContainer"
+                                    style="display: none;">
+                                    <img id="imagePreview" src alt="Preview" />
+                                    <button type="button" class="btn-remove-img"
+                                        onclick="removeImagePreview(event)">
+                                        ✕ Change Image
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Controls & Options -->
+                            <div class="image-controls-grid">
+                                <div class="control-group">
+                                    <label for="imageLanguageSelect">Explanation
+                                        Language:</label>
+                                    <select id="imageLanguageSelect"
+                                        class="form-control">
+                                        <option value="Roman Urdu/Hindi">Roman
+                                            Urdu/Hindi (Aasan Urdu)</option>
+                                        <option value="English">English
+                                            (Academic)</option>
+                                        <option value="Urdu Script">Urdu Script
+                                            (اردو)</option>
+                                    </select>
+                                </div>
+
+                                <div class="control-group">
+                                    <label for="imageCustomPrompt">Custom Prompt
+                                        / Question (Optional):</label>
+                                    <input type="text" id="imageCustomPrompt"
+                                        class="form-control"
+                                        placeholder="e.g., Explain step 2 of this diagram in detail...">
+                                </div>
+                            </div>
+
+                            <!-- Action Button -->
+                            <button type="button" class="btn-primary"
+                                onclick="generateImageExplanation()">
+                                ✨ Explain Image Content
+                            </button>
+                        </div>
+
+                        <!-- Output Result Section -->
+                        <div id="imageExplanationOutputBlock"
+                            style="display: none; margin-top: 25px;">
+                            <div class="output-header">
+                                <span class="badge" id="image-status-badge">⚡
+                                    Processing...</span>
+                            </div>
+                            <div class="ai-response-box"
+                                id="image-ai-response-text">
+                                <!-- AI Explanation stream will render here -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
+
+        <script
+            src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script src="script.js">
+        // Simple client side security: Agar token nahi hai to wapas index par bhej do
+        if (!localStorage.getItem('token')) {
+            window.location.href = "index.html";
+        }
+
+        // Logout working
+        document.getElementById('logoutBtn').onclick = function() {
+            localStorage.clear();
+            window.location.href = "index.html";
+        };
+    </script>
+    </body>
+</html>

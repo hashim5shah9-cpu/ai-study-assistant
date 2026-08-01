@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Study Assistant</title>
+        <link rel="icon"
+            href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+
+        <!-- ====================================================
+     100% RESPONSIVE NAVBAR (FIXED BLOCK)
+     ==================================================== -->
+        <header class="navbar">
+            <div class="logo">Asad.ai</div>
+            <nav class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+            <button class="btn-signup-nav" id="openAuthBtn">Sign Up</button>
+        </header>
+
+        <main class="hero-section">
+            <h1>Your AI Assistant <br><span>For Your Documents</span></h1>
+            <p class="hero-subtitle">
+                5x your work with our custom AI. Extract key info, summarize,
+                and generate <br>
+                content from your documents. Transcribe video/audio files and
+                get cited, high-quality responses in seconds.
+            </p>
+
+            <div class="file-badges">
+                <span class="badge pdf">PDF</span>
+                <span class="badge doc">DOC</span>
+                <span class="badge mp4">MP4</span>
+                <span class="badge ppt">PPT</span>
+                <span class="badge mp3">MP3</span>
+                <span class="more-badge">+ more</span>
+            </div>
+
+            <button class="btn-get-started" id="getStartedBtn">Get
+                started</button>
+
+            <div class="upload-container-box">
+                <div class="upload-tabs">
+                    <button class="tab-btn active">Single-Upload</button>
+                    <button class="tab-btn">Multi-Upload</button>
+                    <button class="tab-btn">Videos/MP3</button>
+                    <button class="tab-btn">Audiobooks</button>
+                </div>
+                <div class="dropzone-area" id="dropZone"
+                    onclick="document.getElementById('fileUploadInput').click()">
+                    <div class="upload-icon">↑</div>
+                    <p>Drag & Drop <br><span>or click to browse</span></p>
+                    <input type="file" id="fileUploadInput"
+                        style="display: none;"
+                        onchange="handleInitialFileSelect(this)">
+                </div>
+            </div>
+        </main>
+
+        <!-- ====================================================
+     1. FEATURES SECTION
+     ==================================================== -->
+        <section id="features" class="landing-section index-features">
+            <div class="section-header">
+                <h2>Powerful AI Features</h2>
+                <p>Everything you need to master your studies in one place.</p>
+            </div>
+
+            <div class="features-grid">
+                <!-- Card 1 -->
+                <div class="feature-card chat-card">
+                    <div class="card-icon">💬</div>
+                    <h3>AI Study Chat</h3>
+                    <p>Chat with our advanced AI to resolve complex math,
+                        coding, or theoretical topics instantly with
+                        context-aware responses.</p>
+                </div>
+                <!-- Card 2 -->
+                <div class="feature-card summary-card">
+                    <div class="card-icon">📝</div>
+                    <h3>Smart Summarizer</h3>
+                    <p>Paste massive paragraphs, notes, or long articles and get
+                        crisp, bulleted summaries within seconds without losing
+                        context.</p>
+                </div>
+                <!-- Card 3 -->
+                <div class="feature-card quiz-card">
+                    <div class="card-icon">🎯</div>
+                    <h3>Instant AI Quizzes</h3>
+                    <p>Test your preparation levels by letting the AI generate
+                        customized real-time multiple-choice questions from your
+                        topics.</p>
+                </div>
+
+                <!-- Card 4 (Index page par sirf dikhane ke liye static card) -->
+                <div class="feature-card multi-upload-static-card">
+                    <div class="card-icon"
+                        style="background: #ffe4e6; color: #e11d48;">📂</div>
+                    <h3>Multi-Upload Doc Engine</h3>
+                    <p>Upload multiple chapters, PDFs, or complete syllabus
+                        notes together. Our AI connects all documents to build
+                        custom interconnected study blueprints.</p>
+                </div>
+
+                <!-- Code Explainer Card -->
+                <div class="feature-card code-explainer-card">
+                    <div class="card-icon"
+                        style="background: #e0f2fe; color: #0284c7;">💡</div>
+                    <h3>Code Explainer</h3>
+                    <p>Upload or paste complex code snippets to get clear,
+                        step-by-step plain English explanations of how they
+                        work.</p>
+                </div>
+
+                <!-- Card 6 (Index page par sirf dikhane ke liye static card) -->
+                <div class="feature-card image-to-text-card">
+                    <div class="card-icon"
+                        style="background: #f3e8ff; color: #7c3aed;">📸</div>
+                    <h3>Image to Text</h3>
+                    <p>Extract clean editable text instantly from book pages,
+                        handwritten notes, screenshots, or any image document
+                        using AI.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ====================================================
+     2. ABOUT SECTION
+     ==================================================== -->
+        <section id="about" class="landing-section index-about">
+            <div class="about-container">
+                <div class="about-content">
+                    <span class="section-badge">Our Mission</span>
+                    <h2>About Asad.ai Platform</h2>
+                    <p>Asad.ai ek modern intelligent student portal hai jise
+                        learning speed ko 10x teiz karne ke liye banaya gaya
+                        hai. Hamara main focus complex education parameters ko
+                        simple elements mein breakdown karna hai.</p>
+                    <p>Chahe aap SoapUI software testing seekh rahe hon, C++
+                        runtime compilers debugging kar rahe hon, ya dense text
+                        documentation review kar rahe hon—Asad.ai har kadam par
+                        aapka reliable peer ban kar help karega.</p>
+                </div>
+                <div class="about-visual">
+                    Asad.ai ✨
+                </div>
+            </div>
+        </section>
+
+        <!-- ====================================================
+     3. HOW IT WORKS SECTION
+     ==================================================== -->
+        <section id="how-it-works" class="landing-section index-how">
+            <div class="section-header">
+                <h2>How It Works</h2>
+                <p>Three simple steps to unlock absolute academic
+                    excellence.</p>
+            </div>
+
+            <div class="steps-container">
+                <div class="step-card">
+                    <div class="step-num">01</div>
+                    <h4>Create Account</h4>
+                    <p>Index page se simple secure registration complete
+                        karein.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">02</div>
+                    <h4>Choose AI Tool</h4>
+                    <p>Dashboard sidebar se Chat, Summarizer ya Quiz tool select
+                        karein.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-num">03</div>
+                    <h4>Get Fast Solutions</h4>
+                    <p>Instantly data transform karein aur results achieve
+                        karein.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====================================================
+     4. FAQ SECTION
+     ==================================================== -->
+        <section id="faq" class="landing-section index-faq">
+            <div class="section-header">
+                <h2>Frequently Asked Questions</h2>
+                <p>Common questions about using our platform.</p>
+            </div>
+
+            <div class="faq-list">
+                <!-- Question 1 -->
+                <div class="faq-item">
+                    <div class="faq-header">
+                        <h4>Kya Asad.ai use karna free hai?</h4>
+                        <span class="faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Haan ji! Initial tools aur learning optimization
+                            functionality platform par complete check ke sath
+                            sab users ke liye system access free provide karta
+                            hai.</p>
+                    </div>
+                </div>
+
+                <!-- Question 2 -->
+                <div class="faq-item">
+                    <div class="faq-header">
+                        <h4>Dashboard par active profile kahan dikhti hai?</h4>
+                        <span class="faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Login complete karne ke baad, aap jab dashboard par
+                            jayenge, to left-sidebar panel mein logout button ke
+                            theek upar aapko apna logged-in dynamic avatar aur
+                            name show ho jayega.</p>
+                    </div>
+                </div>
+
+                <!-- Question 3 -->
+                <div class="faq-item">
+                    <div class="faq-header">
+                        <h4>Kya main kisi bhi subject ke notes generate kar
+                            sakta hu?</h4>
+                        <span class="faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Ji bilkul, aap kisi bhi academic subject ya specific
+                            topic ke tailored notes aur summary asani se
+                            generate kar sakte hain.</p>
+                    </div>
+                </div>
+
+                <!-- Question 4 -->
+                <div class="faq-item">
+                    <div class="faq-header">
+                        <h4>Mujhe system mein error aaye to kahan contact
+                            karu?</h4>
+                        <span class="faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Aap Support Section ya Contact Us form ke zariye
+                            humari support team ko directly query bhejh sakte
+                            hain, hum jald resolve karenge.</p>
+                    </div>
+                </div>
+
+                <!-- Question 5 -->
+                <div class="faq-item">
+                    <div class="faq-header">
+                        <h4>Kya mera study data secure rehta hai?</h4>
+                        <span class="faq-icon">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Haan, aapka tamam personal data aur uploaded content
+                            fully encrypted hota hai aur 100% confidential rehta
+                            hai.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- ====================================================
+     5. PROFESSIONAL FOOTER SECTION
+     ==================================================== -->
+        <footer class="main-footer">
+            <div class="footer-container">
+                <!-- Brand Info -->
+                <div class="footer-brand">
+                    <h3>Asad.ai</h3>
+                    <p>Your intelligent companion for mastering software
+                        testing, coding runtime issues, and accelerated academic
+                        learning loops.</p>
+                </div>
+
+                <!-- Quick Links -->
+                <div class="footer-links">
+                    <h4>Explore</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#about">About Us</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#faq">FAQ</a></li>
+                    </ul>
+                </div>
+
+                <!-- Community / Social Links -->
+                <div class="footer-social">
+                    <h4>Connect</h4>
+                    <div class="social-icons">
+                        <a href="#" title="YouTube">📺</a>
+                        <a href="#" title="GitHub">💻</a>
+                        <a href="#" title="LinkedIn">🌐</a>
+                        <a href="#" title="Twitter">🐦</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Copyright -->
+            <div class="footer-bottom">
+                <p>&copy; 2026 Asad.ai. All rights reserved. Built for 10x
+                    smarter learning.</p>
+            </div>
+        </footer>
+
+        <div class="modal-overlay" id="authModal">
+            <div class="modal-box">
+                <span class="close-modal" id="closeModalBtn">&times;</span>
+
+                <div id="loginSection">
+                    <h2>Welcome Back!</h2>
+                    <form id="loginFormBypass">
+                        <div class="input-group">
+                            <label>Email Address</label>
+                            <input type="email" id="loginEmail"
+                                placeholder="enter email" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Password</label>
+                            <input type="password" id="loginPassword"
+                                placeholder="********" required>
+                        </div>
+                        <button type="button" id="loginSubmitBtn"
+                            class="btn-auth-submit"
+                            onclick="executeForcedLogin(event)">Login</button>
+                    </form>
+                    <p class="switch-auth-text">Account nahi hai? <span
+                            id="switchToSignup">Signup Karein</span></p>
+                    <div id="loginError" class="error-message"></div>
+                </div>
+
+                <div id="signupSection" style="display: none;">
+                    <h2>Create Account</h2>
+                    <form id="signupForm">
+                        <div class="input-group">
+                            <label>Full Name</label>
+                            <input type="text" id="signupName"
+                                placeholder="enter your name" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Email Address</label>
+                            <input type="email" id="signupEmail"
+                                placeholder="enter email" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Password</label>
+                            <input type="password" id="signupPassword"
+                                placeholder="********" required>
+                        </div>
+                        <button type="submit" class="btn-auth-submit">Sign
+                            Up</button>
+                    </form>
+                    <p class="switch-auth-text">Pehle se account hai? <span
+                            id="switchToLogin">Login Karein</span></p>
+                    <div id="signupError" class="error-message"></div>
+                    <div id="signupSuccess" class="success-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <script src="script.js"></script>
+        <script>
+        function handleInitialFileSelect(input) {
+            if (input.files.length > 0) {
+                alert("File select ho gayi hai! Is par mazeed kaam karne ke liye pehle Login ya Signup karein.");
+                document.getElementById('authModal').classList.add('active');
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('signupSection').style.display = 'none';
+            }
+        }
+    </script>
+    </body>
+</html>
