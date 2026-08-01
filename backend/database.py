@@ -1,13 +1,15 @@
+import os
 import mysql.connector
 from mysql.connector import Error
 
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
-            host="localhost",
-            user="root",          # Agar password rakha hai to likhein, warna khali "" chordein
-            password="",          # XAMPP/WAMP me aksar khali "" hota hai
-            database="ai_study_assistant" # Exact matching database
+            host=os.getenv("DB_HOST", "localhost"),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASSWORD", ""),
+            database=os.getenv("DB_NAME", "ai_study_assistant"),
+            port=int(os.getenv("DB_PORT", "3306"))
         )
         return connection
     except Error as e:
