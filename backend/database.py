@@ -1,7 +1,13 @@
 import os
 import sqlite3
-import mysql.connector
-from mysql.connector import Error
+
+# Safe import for mysql.connector
+try:
+    import mysql.connector
+    from mysql.connector import Error
+except Exception as e:
+    mysql = None
+    Error = Exception
 
 class SQLiteDictCursor:
     def __init__(self, cursor):
@@ -90,9 +96,9 @@ def init_sqlite_tables(conn):
     cursor.close()
 
 def get_db_connection():
-    # 1. If DB_HOST is explicitly configured, try MySQL
+    # 1. If DB_HOST is explicitly configured and mysql module available, try MySQL
     db_host = os.getenv("DB_HOST")
-    if db_host:
+    if db_host and mysql and hasattr(mysql, 'connector'):
         try:
             connection = mysql.connector.connect(
                 host=db_host,

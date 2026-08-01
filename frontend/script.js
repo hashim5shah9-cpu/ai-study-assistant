@@ -92,7 +92,10 @@ window.executeForcedLogin = async function (event) {
             })
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try { data = JSON.parse(rawText); } catch(e) { data = { detail: rawText || "Server error" }; }
+
         console.log("LOGIN RESPONSE RECEIVED:", data);
 
         if (res.ok) {
@@ -208,7 +211,10 @@ if (signupForm) {
                 })
             });
 
-            const data = await res.json();
+            const rawText = await res.text();
+            let data;
+            try { data = JSON.parse(rawText); } catch(e) { data = { detail: rawText || "Server error" }; }
+
 
             if (res.ok) {
                 errorDiv.innerText = "Account ban gaya! Ab login kijiye.";

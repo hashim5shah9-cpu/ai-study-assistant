@@ -1,23 +1,45 @@
 
 import os
 import requests
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from groq import Groq
-from database import get_db_connection
-from pypdf import PdfReader
-from pptx import Presentation
 import io 
 import json
 import re
-import docx2txt
-import mysql.connector
 import base64
-from google import genai
-from google.genai import types
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+try:
+    from groq import Groq
+except Exception:
+    Groq = None
+
+try:
+    from pypdf import PdfReader
+except Exception:
+    PdfReader = None
+
+try:
+    from pptx import Presentation
+except Exception:
+    Presentation = None
+
+try:
+    import docx2txt
+except Exception:
+    docx2txt = None
+
+try:
+    from google import genai
+    from google.genai import types
+except Exception:
+    genai = None
+    types = None
+
+from database import get_db_connection
 
 app = FastAPI()
+
 
 # 👇 Yeh CORS Middleware setup add karein
 app.add_middleware(
