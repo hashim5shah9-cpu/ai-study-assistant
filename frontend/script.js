@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://127.0.0.1:8000";
+const BACKEND_URL = window.BACKEND_URL || localStorage.getItem('BACKEND_URL') || "http://127.0.0.1:8000";
 
 // Modals Triggering
 const authModal = document.getElementById('authModal');
@@ -486,6 +486,7 @@ if (quizBtn) {
         }
     });
 }
+
 
 // ====================================================
 // MULTI-UPLOAD AND SUMMARIZE LOGIC CONTROLLER
