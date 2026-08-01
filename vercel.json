@@ -1,15 +1,15 @@
 {
   "rewrites": [
     {
-      "source": "/auth/(.*)",
+      "source": "/auth/:path*",
       "destination": "/api/index.py"
     },
     {
-      "source": "/ai/(.*)",
+      "source": "/ai/:path*",
       "destination": "/api/index.py"
     },
     {
-      "source": "/api/(.*)",
+      "source": "/api/:path*",
       "destination": "/api/index.py"
     },
     {
@@ -21,7 +21,7 @@
       "destination": "/frontend/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api|auth|ai|health).*)",
       "destination": "/frontend/$1"
     }
   ]

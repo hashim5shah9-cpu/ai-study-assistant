@@ -1,17 +1,54 @@
+// first code 
+// const getBackendUrl = () => {
+//     if (typeof window !== 'undefined') {
+//         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+//         if (!isLocal) {
+//             // Live domain (Vercel) -> Always use current site origin
+//             return window.location.origin;
+//         }
+//         if (window.BACKEND_URL) return window.BACKEND_URL;
+//         const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('BACKEND_URL') : null;
+//         if (stored) return stored;
+//     }
+//     return 'http://127.0.0.1:8000';
+// };
+// const BACKEND_URL = getBackendUrl();
+
+// second code 
+// const getBackendUrl = () => {
+//     if (typeof window !== 'undefined') {
+//         const hostname = window.location.hostname;
+        
+//         // Check if running on localhost/127.0.0.1 (Local environment)
+//         const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+        
+//         if (isLocal) {
+//             // Local dev server fallback
+//             return 'http://127.0.0.1:8000';
+//         }
+//     }
+//     // Remote devices / Live deployment (Vercel, Mobile, Friends' PCs)
+//     return 'https://asad0978.pythonanywhere.com';
+// };
+
+// const BACKEND_URL = getBackendUrl();
+// console.log("Current Active Backend URL:", BACKEND_URL);
+
 const getBackendUrl = () => {
+    // Check if running locally (VS Code Live Server)
     if (typeof window !== 'undefined') {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (!isLocal) {
-            // Live domain (Vercel) -> Always use current site origin
-            return window.location.origin;
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            // Local testing ke liye local backend use karein
+            return 'http://127.0.0.1:8000';
         }
-        if (window.BACKEND_URL) return window.BACKEND_URL;
-        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('BACKEND_URL') : null;
-        if (stored) return stored;
     }
-    return 'http://127.0.0.1:8000';
+    // Vercel, Mobiles, and external PCs ke liye Always Live PythonAnywhere Backend
+    return 'https://asad0978.pythonanywhere.com';
 };
+
 const BACKEND_URL = getBackendUrl();
+console.log("Connected Backend URL:", BACKEND_URL);
 
 
 // Modals Triggering
