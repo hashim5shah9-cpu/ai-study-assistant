@@ -9,3 +9,5 @@ docx2txt
 google-genai
 pymysql
 pg8000
+mangum
+

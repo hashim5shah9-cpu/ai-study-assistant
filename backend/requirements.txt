@@ -1,6 +1,8 @@
 google-genai
 pymysql
 pg8000
+mangum
+
 
 uvicorn
 pydantic
