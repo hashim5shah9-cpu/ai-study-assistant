@@ -24,6 +24,29 @@ app.add_middleware(
 )
 
 USERS_STORE = {}
+PERSISTENT_USERS_FILE = "/tmp/users_store_backup.json"
+
+def load_users_store():
+    global USERS_STORE
+    if os.path.exists(PERSISTENT_USERS_FILE):
+        try:
+            with open(PERSISTENT_USERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    USERS_STORE.update(data)
+        except Exception:
+            pass
+
+def save_users_store():
+    try:
+        with open(PERSISTENT_USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(USERS_STORE, f)
+    except Exception:
+        pass
+
+# Initialize on module load
+load_users_store()
+
 
 def safe_get_db():
     try:
@@ -84,22 +107,22 @@ class ImageExplanationRequest(BaseModel):
 # SIGNUP ENDPOINT
 @app.post("/auth/signup")
 async def signup(payload: SignupRequest):
+    load_users_store()
     email = payload.email.lower().strip()
-    if email in USERS_STORE:
-        raise HTTPException(status_code=400, detail="Email pehle se registered hai!")
     
     USERS_STORE[email] = {
         "username": payload.username,
         "email": email,
         "password": payload.password
     }
+    save_users_store()
     
     db = safe_get_db()
     if db:
         try:
             cursor = db.cursor(dictionary=True) if hasattr(db, 'cursor') else None
             if cursor:
-                cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                cursor.execute("SELECT user_id FROM users WHERE LOWER(email) = %s", (email,))
                 if not cursor.fetchone():
                     query = "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)"
                     cursor.execute(query, (payload.username, email, payload.password))
@@ -119,26 +142,34 @@ async def signup(payload: SignupRequest):
 # LOGIN ENDPOINT
 @app.post("/auth/login")
 async def login(payload: LoginRequest):
+    load_users_store()
     email = payload.email.lower().strip()
     user = USERS_STORE.get(email)
     
+    if not user:
+        for u_email, u_data in USERS_STORE.items():
+            if u_email.lower().strip() == email:
+                user = u_data
+                break
+
     if not user:
         db = safe_get_db()
         if db:
             try:
                 cursor = db.cursor(dictionary=True) if hasattr(db, 'cursor') else None
                 if cursor:
-                    query = "SELECT user_id, username, email, password_hash FROM users WHERE email = %s"
+                    query = "SELECT user_id, username, email, password_hash FROM users WHERE LOWER(email) = %s"
                     cursor.execute(query, (email,))
                     db_user = cursor.fetchone()
                     cursor.close()
-                    if db_user and (db_user.get('password_hash') == payload.password or db_user.get('password') == payload.password):
+                    if db_user:
                         user = {
                             "username": db_user.get('username', 'User'),
                             "email": email,
-                            "password": payload.password
+                            "password": db_user.get('password_hash') or db_user.get('password')
                         }
                         USERS_STORE[email] = user
+                        save_users_store()
             except Exception:
                 pass
             finally:

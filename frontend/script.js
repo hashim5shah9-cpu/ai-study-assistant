@@ -52,21 +52,14 @@ const BACKEND_URL = getBackendUrl();
 console.log("Connected Backend URL:", BACKEND_URL);
 
 // ====================================================
-// AUTO-LOGIN REDIRECTION FOR LOGGED-IN USERS
 // ====================================================
-(function checkAutoLogin() {
+// SESSION INITIALIZATION FOR LOGGED-IN USERS
+// ====================================================
+(function checkActiveUserSession() {
     try {
         const userEmail = localStorage.getItem('userEmail');
-        const isLoggedIn = localStorage.getItem('isLoggedIn');
-        const path = window.location.pathname;
-
-        const isLandingPage = path.endsWith('index.html') || path === '/' || path === '' || path.endsWith('/') || path.includes('index.html');
-
-        if (userEmail && (isLoggedIn === 'true' || userEmail.includes('@'))) {
-            if (isLandingPage && !path.includes('dashboard.html')) {
-                console.log("Logged-in session active. Auto-redirecting to dashboard.html...");
-                window.location.replace("dashboard.html");
-            }
+        if (userEmail && typeof initActiveUserProfileAndLogout === 'function') {
+            initActiveUserProfileAndLogout();
         }
     } catch(e) {}
 })();
@@ -82,7 +75,17 @@ const loginSection = document.getElementById('loginSection');
 const signupSection = document.getElementById('signupSection');
 
 if (openAuthBtn) openAuthBtn.onclick = () => { authModal.classList.add('active'); loginSection.style.display = 'block'; signupSection.style.display = 'none'; }
-if (getStartedBtn) getStartedBtn.onclick = () => { authModal.classList.add('active'); loginSection.style.display = 'block'; signupSection.style.display = 'none'; }
+if (getStartedBtn) {
+    getStartedBtn.onclick = () => {
+        if (localStorage.getItem('userEmail')) {
+            window.location.href = "dashboard.html";
+        } else {
+            authModal.classList.add('active');
+            loginSection.style.display = 'block';
+            signupSection.style.display = 'none';
+        }
+    };
+}
 if (closeModalBtn) closeModalBtn.onclick = () => authModal.classList.remove('active');
 
 if (document.getElementById('switchToSignup')) {
@@ -1238,22 +1241,75 @@ function initActiveUserProfileAndLogout() {
         if (emailSlot) emailSlot.innerText = currentLoggedInEmail;
     }
 
+    // 1. UPDATE INDEX.HTML NAVBAR FOR LOGGED-IN USERS
+    const openAuthBtn = document.getElementById('openAuthBtn');
+    const navLinks = document.querySelector('.nav-links') || document.querySelector('header.navbar');
+    if (openAuthBtn && currentLoggedInEmail) {
+        let displayName = currentLoggedInEmail.split('@')[0];
+        displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+        let authBox = document.getElementById('navUserAuthBox');
+        if (!authBox) {
+            authBox = document.createElement('div');
+            authBox.id = 'navUserAuthBox';
+            authBox.style.cssText = "display: flex; align-items: center; gap: 10px;";
+            openAuthBtn.parentNode.insertBefore(authBox, openAuthBtn);
+        }
+
+        openAuthBtn.style.display = 'none';
+        authBox.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 6px; color: #fff; font-size: 0.88rem; font-weight: 500;">
+                <div style="width: 30px; height: 30px; background: #3b82f6; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.85rem;">
+                    ${displayName.charAt(0)}
+                </div>
+                <span style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f8fafc;">${displayName}</span>
+            </div>
+            <a href="dashboard.html" style="background: linear-gradient(135deg, #ff6b00, #ff8800); color: white; padding: 7px 16px; border-radius: 20px; text-decoration: none; font-weight: 600; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(255,107,0,0.3);">
+                📊 Dashboard
+            </a>
+            <button id="navHeaderLogoutBtn" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.82rem; font-weight: 500;">
+                Logout
+            </button>
+        `;
+
+        const navHeaderLogoutBtn = document.getElementById('navHeaderLogoutBtn');
+        if (navHeaderLogoutBtn) {
+            navHeaderLogoutBtn.onclick = function (e) {
+                e.preventDefault();
+                localStorage.clear();
+                alert("Aap kamiyabi se logout ho chuke hain.");
+                window.location.href = "index.html";
+            };
+        }
+    }
+
+    // 2. ADD SIDEBAR ← BACK TO HOME BUTTON ON DASHBOARD.HTML
+    const sidebar = document.querySelector('aside.sidebar') || document.querySelector('.sidebar');
+    if (sidebar) {
+        let backBtn = document.getElementById('sidebarBackToHomeBtn');
+        if (!backBtn) {
+            const brand = sidebar.querySelector('.sidebar-brand');
+            if (brand) {
+                backBtn = document.createElement('a');
+                backBtn.id = 'sidebarBackToHomeBtn';
+                backBtn.href = "index.html";
+                backBtn.style.cssText = "display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.12); color: #60a5fa; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-size: 0.88rem; font-weight: 600; margin: 12px 0 8px 0; border: 1px solid rgba(96, 165, 250, 0.3); transition: all 0.2s;";
+                backBtn.innerHTML = `← Back to Home`;
+                brand.parentNode.insertBefore(backBtn, brand.nextSibling);
+            }
+        }
+    }
+
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        // Purane handlers ko kill karne ke liye direct event listener assignment
         logoutBtn.onclick = function (e) {
             e.preventDefault();
             e.stopPropagation();
 
             localStorage.clear();
             alert("Aap kamiyabi se logout ho chuke hain.");
-
-            // Automatic location matching for Port 5500 -> index.html
-            let path = window.location.pathname;
-            let dir = path.substring(0, path.lastIndexOf('/'));
-            window.location.href = window.location.origin + dir + "/index.html";
+            window.location.href = "index.html";
         };
-        console.log("Logout handler strictly locked onto index.html!");
     }
 }
 
