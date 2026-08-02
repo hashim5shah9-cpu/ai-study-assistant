@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import sqlite3
 
@@ -21,7 +22,6 @@ try:
     import pg8000
 except BaseException:
     pg8000 = None
-
 
 
 # Persistent JSON Backup path for Vercel Serverless ephemeral /tmp
@@ -153,11 +153,62 @@ def init_sqlite_tables(conn):
         );
     """)
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS code_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            code_input TEXT,
+            explanation TEXT,
+            language TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            file_name TEXT,
+            summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS image_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            image_name TEXT,
+            explanation TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS multi_uploaded_docs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             file_name TEXT,
             explanation TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quizzes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            topic TEXT,
+            score INTEGER DEFAULT 0,
+            total_questions INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quiz_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            quiz_id INTEGER,
+            question TEXT,
+            option_a TEXT,
+            option_b TEXT,
+            option_c TEXT,
+            option_d TEXT,
+            correct_option TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -183,18 +234,18 @@ def init_sqlite_tables(conn):
 
 
 def get_db_connection():
-    db_host = os.getenv("DB_HOST")
+    db_host = os.getenv("DB_HOST", "localhost")
     db_user = os.getenv("DB_USER", "root")
     db_pass = os.getenv("DB_PASSWORD", "")
     db_name = os.getenv("DB_NAME", "ai_study_assistant")
     db_port = int(os.getenv("DB_PORT", "3306"))
     db_url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL") or os.getenv("POSTGRES_URL")
 
-    # 1. PyMySQL Connection (For MySQL / MariaDB cloud databases)
-    if (db_host or (db_url and "mysql" in db_url.lower())) and pymysql:
+    # 1. PyMySQL Connection (For MySQL / MariaDB / phpMyAdmin databases)
+    if pymysql:
         try:
             connection = pymysql.connect(
-                host=db_host or "localhost",
+                host=db_host,
                 user=db_user,
                 password=db_pass,
                 database=db_name,
@@ -207,7 +258,7 @@ def get_db_connection():
             print(f"PyMySQL Connection Notice: {e}. Falling back...")
 
     # 2. mysql.connector Connection
-    if db_host and mysql_connector:
+    if mysql_connector:
         try:
             connection = mysql_connector.connect(
                 host=db_host,

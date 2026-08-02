@@ -59,6 +59,61 @@ def safe_get_db():
         return None
 
 
+# =====================================================================
+# UNIVERSAL DATABASE OUTPUT LOGGING SYSTEM
+# =====================================================================
+def save_output_to_db(feature_type: str, email: str, data: dict):
+    db = safe_get_db()
+    if not db:
+        return
+    try:
+        cursor = db.cursor(dictionary=True) if hasattr(db, 'cursor') else db.cursor()
+        user_id = None
+        if email:
+            cursor.execute("SELECT user_id FROM users WHERE LOWER(email) = %s", (email.lower().strip(),))
+            row = cursor.fetchone()
+            if row:
+                user_id = row['user_id'] if isinstance(row, dict) else row[0]
+
+        if feature_type == "chat":
+            query = "INSERT INTO chat_history (user_id, prompt, response) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("prompt", ""), data.get("response", "")))
+
+        elif feature_type == "summarize":
+            query = "INSERT INTO documents (user_id, file_name, summary) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("file_name", "Document.pdf"), data.get("summary", "")))
+
+        elif feature_type == "multi_upload":
+            query = "INSERT INTO multi_uploaded_docs (user_id, file_name, explanation) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("file_name", "MultiDoc.pdf"), data.get("explanation", "")))
+
+        elif feature_type == "code":
+            query = "INSERT INTO code_explanations (user_id, code_input, explanation, language) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("code_input", ""), data.get("explanation", ""), data.get("language", "auto")))
+
+        elif feature_type == "image":
+            query = "INSERT INTO image_explanations (user_id, image_name, explanation) VALUES (%s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("image_name", "Diagram.png"), data.get("explanation", "")))
+
+        elif feature_type == "quiz":
+            query = "INSERT INTO quizzes (user_id, topic, score, total_questions) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (user_id, data.get("topic", "Quiz Topic"), 0, len(data.get("questions", []))))
+            quiz_id = getattr(cursor, 'lastrowid', 1)
+            for q in data.get("questions", []):
+                q_query = "INSERT INTO quiz_questions (quiz_id, question, option_a, option_b, option_c, option_d, correct_option) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                cursor.execute(q_query, (quiz_id, q.get("question", ""), q.get("a", ""), q.get("b", ""), q.get("c", ""), q.get("d", ""), q.get("answer", "a")))
+
+        db.commit()
+        cursor.close()
+    except Exception as e:
+        print(f"DB Output Logging Notice [{feature_type}]: {e}")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
 @app.get("/")
 @app.get("/health")
 @app.get("/api/health")
@@ -550,6 +605,10 @@ async def study_chat(payload: ChatRequest):
     ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nUser Question: {payload.message}")
     if ai_res == "ERROR":
         ai_res = f"### 💡 AI Assistant Response\n\n* **Answer**: {payload.message}\n* **Notes**: The AI study assistant is ready to help with your academic questions."
+    
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("chat", payload.email, {"prompt": payload.message, "response": ai_res})
+
     return {"response": ai_res}
 
 
@@ -584,6 +643,9 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
         lines = [l.strip() for l in truncated_text.split('\n') if len(l.strip()) > 15]
         bullets = "\n".join([f"* {line}" for line in lines[:8]]) if lines else f"* Document {file.filename} contains key academic notes and study materials."
         ai_res = f"### 📄 Document Summary ({file.filename})\n\n**Key Takeaways & Points:**\n{bullets}\n\n* **Overview**: The document provides structured information for study and revision."
+
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("summarize", email, {"file_name": file.filename, "summary": ai_res})
 
     return {"response": ai_res}
 
@@ -631,6 +693,9 @@ async def generate_quiz(payload: QuizRequest):
             }
         ]
 
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("quiz", payload.email, {"topic": payload.topic, "questions": questions_list})
+
     return {"quiz_id": 1, "questions": questions_list}
 
 
@@ -673,6 +738,9 @@ async def multi_upload_explain(
         bullets = "\n".join([f"* {line}" for line in lines[:8]]) if lines else f"* Detailed analysis of {file.filename}"
         ai_explanation = f"### 📚 Academic Analysis ({file.filename})\n\n**Core Findings & Analysis:**\n{bullets}"
 
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("multi_upload", email, {"file_name": file.filename, "explanation": ai_explanation})
+
     return {"explanation": ai_explanation}
 
 
@@ -700,6 +768,9 @@ async def explain_code(data: CodeExplanationRequest):
     if ai_explanation == "ERROR":
         ai_explanation = f"### 🎯 Purpose & Overview\nThe provided {data.language} code executes standard program operations.\n\n### 🔬 Code Breakdown\n```\n{data.code}\n```"
         
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("code", data.email, {"code_input": data.code, "explanation": ai_explanation, "language": data.language})
+
     return {"explanation": ai_explanation}
 
 
@@ -744,5 +815,8 @@ async def explain_image(data: ImageExplanationRequest):
             "### 💡 Practical Takeaways\n"
             "* Use the diagram flow to understand the core subject concept."
         )
+
+    # SAVE OUTPUT TO DATABASE
+    save_output_to_db("image", data.email, {"image_name": "Image_Diagram.png", "explanation": ai_explanation})
 
     return {"explanation": ai_explanation}
