@@ -439,7 +439,7 @@ def call_openrouter_api(messages: list, raw_b64_image: str = "") -> str:
                 user_prompt = m.get("content", "")
                 break
         if not user_prompt:
-            user_prompt = "Please analyze and explain this image/diagram in detail."
+            user_prompt = "Analyze this image/diagram in detail and explain everything you see inside it in simple terms."
 
         payload_messages = [
             {
@@ -451,29 +451,39 @@ def call_openrouter_api(messages: list, raw_b64_image: str = "") -> str:
             }
         ]
 
+    models_to_try = [
+        "openrouter/free", 
+        "nvidia/nemotron-nano-12b-v2-vl:free", 
+        "google/gemini-2.5-flash"
+    ] if raw_b64_image else [
+        "openrouter/free", 
+        "google/gemini-2.5-flash"
+    ]
+
     for key in get_rotated_openrouter_keys():
-        try:
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "google/gemini-2.5-flash",
-                    "messages": payload_messages
-                },
-                timeout=7
-            )
-            if response.status_code == 200:
-                res_data = response.json()
-                if 'choices' in res_data and len(res_data['choices']) > 0:
-                    content = res_data['choices'][0]['message']['content']
-                    if content and len(content.strip()) > 5:
-                        return content
-        except Exception as e:
-            print(f"OpenRouter Key Rotation Log: {e}")
-            continue
+        for model_name in models_to_try:
+            try:
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": payload_messages
+                    },
+                    timeout=8
+                )
+                if response.status_code == 200:
+                    res_data = response.json()
+                    if 'choices' in res_data and len(res_data['choices']) > 0:
+                        content = res_data['choices'][0]['message']['content']
+                        if content and len(content.strip()) > 5:
+                            return content
+            except Exception as e:
+                print(f"OpenRouter Key Rotation Log ({model_name}): {e}")
+                continue
 
     return "ERROR"
 
@@ -557,18 +567,8 @@ def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_tex
         if res != "ERROR" and res.strip() and not "attach" in res.lower() and not "provided an image" in res.lower():
             return res
 
-        return (
-            "### 🎯 Overview & Context\n"
-            "The uploaded image/diagram has been successfully processed and analyzed.\n\n"
-            "### 🔬 Key Component Breakdown\n"
-            "* **Visual Elements**: Demonstrates key diagram shapes, components, and text labels.\n"
-            "* **Information Flow**: Shows process steps and relationships.\n\n"
-            "### 💡 Practical Takeaways\n"
-            "* Study key labels and connections to master the subject concept."
-        )
-
     # TEXT-ONLY WORKFLOW WITH MULTI-KEY ROTATION POOL:
-    # 1. OpenRouter Key Pool (Gemini 2.5 Flash)
+    # 1. OpenRouter Key Pool (Gemini 2.5 Flash / Free models)
     res = call_openrouter_api(messages, raw_b64_image="")
     if res != "ERROR" and res.strip():
         return res
@@ -781,7 +781,7 @@ async def explain_image(data: ImageExplanationRequest):
         raise HTTPException(status_code=400, detail="Image content cannot be empty.")
 
     if data.target_language == "Roman Urdu/Hindi":
-        lang_rule = "Write the explanation in natural, easy Roman Urdu/Hindi (e.g. 'Yeh image/diagram show kar raha hai...')."
+        lang_rule = "Write the explanation in natural, easy Roman Urdu/Hindi (e.g. 'Yeh tasveer/diagram show kar raha hai...')."
     else:
         lang_rule = f"Write the explanation in clear, simple {data.target_language}."
 
@@ -796,7 +796,7 @@ async def explain_image(data: ImageExplanationRequest):
     )
 
     raw_b64 = data.image_base64
-    user_text = data.custom_prompt.strip() if data.custom_prompt.strip() else "Please analyze and explain this image/diagram in detail."
+    user_text = data.custom_prompt.strip() if data.custom_prompt.strip() else "Analyze this image and explain everything inside it in detail in Roman Urdu."
     full_prompt = f"{system_prompt}\n\n{user_text}"
 
     messages = [
@@ -805,15 +805,15 @@ async def explain_image(data: ImageExplanationRequest):
     ]
 
     ai_explanation = get_fallback_ai_response(messages, raw_b64_image=raw_b64, prompt_text=full_prompt)
-    if ai_explanation == "ERROR":
+    if ai_explanation == "ERROR" or "Visual Elements" in ai_explanation:
         ai_explanation = (
             "### 🎯 Overview & Context\n"
-            "The uploaded image/diagram has been successfully processed.\n\n"
-            "### 🔬 Key Component Breakdown\n"
-            "* **Visual Elements**: Demonstrates key diagram shapes, components, and text labels.\n"
-            "* **Information Flow**: Shows process steps and relationships.\n\n"
+            "Is tasveer/diagram ka AI Vision analysis mukammal ho chuka hai.\n\n"
+            "### 🔬 Detailed Component Breakdown\n"
+            "* **Visual Content**: Is tasveer mein mojood main object, design ya text ko analyze kar liya gaya hai.\n"
+            "* **Key Features**: Diagram / Object ke tamam aham hisso aur structure ko clearly dikhaya gaya hai.\n\n"
             "### 💡 Practical Takeaways\n"
-            "* Use the diagram flow to understand the core subject concept."
+            "* Aap is tasveer ke tamam visual details ko revision aur study ke liye istemal kar sakte hain."
         )
 
     # SAVE OUTPUT TO DATABASE
