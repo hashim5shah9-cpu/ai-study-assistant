@@ -1,4 +1,7 @@
-fastapi
+google-genai
+pymysql
+pg8000
+
 uvicorn
 pydantic
 requests
