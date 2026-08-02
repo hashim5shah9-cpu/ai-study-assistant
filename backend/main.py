@@ -40,15 +40,20 @@ from database import get_db_connection
 
 app = FastAPI()
 
-
-# 👇 Yeh CORS Middleware setup add karein
+# 👇 Ye CORS configuration zaroori hai
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Har frontend (Live Server + Vercel) ko allow karega
+    allow_origins=[
+        "https://ai-study-assistant-q7y4.vercel.app",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "*"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # All methods (GET, POST, etc.)
+    allow_methods=["*"], # POST, GET, OPTIONS sab allow honge
     allow_headers=["*"],
 )
+
 
 @app.get("/health")
 @app.get("/api/health")
