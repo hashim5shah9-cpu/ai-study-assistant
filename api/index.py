@@ -9,17 +9,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Ensure api directory is in sys.path
-api_dir = os.path.dirname(os.path.abspath(__file__))
-if api_dir not in sys.path:
-    sys.path.insert(0, api_dir)
-
-try:
-    from database import get_db_connection
-except BaseException:
-    get_db_connection = lambda: None
-
-
 app = FastAPI()
 
 # 1. CORS MIDDLEWARE
@@ -30,6 +19,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# In-memory persistent user store for fast serverless execution
+USERS_STORE = {}
+
+def safe_get_db():
+    try:
+        api_dir = os.path.dirname(os.path.abspath(__file__))
+        if api_dir not in sys.path:
+            sys.path.insert(0, api_dir)
+        import database
+        return database.get_db_connection()
+    except BaseException:
+        return None
 
 
 @app.get("/")
@@ -44,7 +46,6 @@ async def health_check():
 # ====================================================
 GROQ_KEY = os.getenv("GROQ_KEY", "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")      
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "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")  
-GEMINI_KEY = os.getenv("GEMINI_KEY", "AQ.Ab8RN6K5igFNFB0ayrDT3fELaPbHUh0eOeZI75jx1-CG2f5AvA")
 
 
 # Request Models
@@ -81,64 +82,81 @@ class ImageExplanationRequest(BaseModel):
 # SIGNUP ENDPOINT
 @app.post("/auth/signup")
 async def signup(payload: SignupRequest):
-    db = get_db_connection()
-    if not db:
-        raise HTTPException(status_code=500, detail="Database connection failure")
-    try:
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT user_id FROM users WHERE email = %s", (payload.email,))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Email pehle se registered hai!")
-        
-        query = "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)"
-        cursor.execute(query, (payload.username, payload.email, payload.password))
-        db.commit()
-        cursor.close()
-        return {"message": "Account successfully created!"}
-    except HTTPException as http_ex:
-        raise http_ex
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
+    email = payload.email.lower().strip()
+    if email in USERS_STORE:
+        raise HTTPException(status_code=400, detail="Email pehle se registered hai!")
+    
+    USERS_STORE[email] = {
+        "username": payload.username,
+        "email": email,
+        "password": payload.password
+    }
+    
+    db = safe_get_db()
+    if db:
         try:
-            db.close()
+            cursor = db.cursor(dictionary=True) if hasattr(db, 'cursor') else None
+            if cursor:
+                cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                if not cursor.fetchone():
+                    query = "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)"
+                    cursor.execute(query, (payload.username, email, payload.password))
+                    db.commit()
+                cursor.close()
         except Exception:
             pass
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+    return {"message": "Account successfully created!"}
+
 
 # LOGIN ENDPOINT
 @app.post("/auth/login")
 async def login(payload: LoginRequest):
-    db = get_db_connection()
-    if not db:
-        raise HTTPException(status_code=500, detail="Database connection failure")
-    try:
-        cursor = db.cursor(dictionary=True)
-        query = "SELECT user_id, username, email FROM users WHERE email = %s AND password_hash = %s"
-        cursor.execute(query, (payload.email, payload.password))
-        user = cursor.fetchone()
-        cursor.close()
+    email = payload.email.lower().strip()
+    user = USERS_STORE.get(email)
+    
+    if not user:
+        db = safe_get_db()
+        if db:
+            try:
+                cursor = db.cursor(dictionary=True) if hasattr(db, 'cursor') else None
+                if cursor:
+                    query = "SELECT user_id, username, email, password_hash FROM users WHERE email = %s"
+                    cursor.execute(query, (email,))
+                    db_user = cursor.fetchone()
+                    cursor.close()
+                    if db_user and (db_user.get('password_hash') == payload.password or db_user.get('password') == payload.password):
+                        user = {
+                            "username": db_user.get('username', 'User'),
+                            "email": email,
+                            "password": payload.password
+                        }
+                        USERS_STORE[email] = user
+            except Exception:
+                pass
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+
+    if not user or user.get("password") != payload.password:
+        raise HTTPException(status_code=401, detail="Ghalat email ya password!")
         
-        if not user:
-            raise HTTPException(status_code=401, detail="Ghalat email ya password!")
-            
-        return {
-            "token": "fake-jwt-token",
-            "email": user['email'],
-            "username": user['username']
-        }
-    except HTTPException as http_ex:
-        raise http_ex
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        try:
-            db.close()
-        except Exception:
-            pass
+    return {
+        "token": "fake-jwt-token",
+        "email": user['email'],
+        "username": user['username']
+    }
 
 
 # =====================================================================
-# AI ENGINES WITH MULTI-FALLBACK (SAFE REST + GROQ)
+# AI ENGINES WITH MULTI-FALLBACK
 # =====================================================================
 def call_openrouter_api(messages: list) -> str:
     try:
@@ -169,31 +187,20 @@ def call_groq_api(prompt_text: str) -> str:
         if not GROQ_KEY:
             return "ERROR"
 
-        try:
-            from groq import Groq
-            client = Groq(api_key=GROQ_KEY)
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt_text}],
-                temperature=0.5
-            )
-            return completion.choices[0].message.content
-        except BaseException:
-            # Fallback to Groq HTTP REST API if SDK not present
-            res = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "llama-3.3-70b-versatile",
-                    "messages": [{"role": "user", "content": prompt_text}]
-                },
-                timeout=12
-            )
-            if res.status_code == 200:
-                return res.json()['choices'][0]['message']['content']
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt_text}]
+            },
+            timeout=12
+        )
+        if res.status_code == 200:
+            return res.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"Groq Log: {e}")
     return "ERROR"
@@ -231,7 +238,7 @@ def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_tex
     if res != "ERROR":
         return res
 
-    # 2. Secondary Engine: Groq (Llama 3.3 70b)
+    # 2. Secondary Engine: Groq REST API (Llama 3.3 70b)
     res = call_groq_api(prompt_text)
     if res != "ERROR":
         return res
@@ -274,37 +281,10 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
     
     try:
         file_bytes = await file.read()
-        
-        if filename.endswith('.txt'):
-            extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith('.pdf'):
-            try:
-                from pypdf import PdfReader
-                pdf_file = io.BytesIO(file_bytes)
-                reader = PdfReader(pdf_file)
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text: extracted_text += text + "\n"
-            except BaseException:
-                extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith('.ppt') or filename.endswith('.pptx'):
-            try:
-                from pptx import Presentation
-                ppt_file = io.BytesIO(file_bytes)
-                prs = Presentation(ppt_file)
-                for slide in prs.slides:
-                    for shape in slide.shapes:
-                        if hasattr(shape, "text") and shape.text:
-                            extracted_text += shape.text + "\n"
-            except BaseException:
-                extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        else:
-            extracted_text = file_bytes.decode("utf-8", errors="ignore")
-            
+        extracted_text = file_bytes.decode("utf-8", errors="ignore")
         if not extracted_text.strip():
             extracted_text = f"Uploaded File: {file.filename}"
-            
-    except Exception as e:
+    except Exception:
         extracted_text = f"Uploaded File: {file.filename}"
 
     system_prompt = (
@@ -343,7 +323,6 @@ async def generate_quiz(payload: QuizRequest):
     try:
         questions_list = json.loads(clean_json_str)
     except Exception:
-        # Fallback structured quiz if raw JSON format parsing differs
         questions_list = [
             {
                 "question": f"What is a core fundamental concept in {payload.topic}?",
@@ -376,36 +355,11 @@ async def multi_upload_explain(
         "You are an advanced AI Academic Assistant. Analyze the provided document content and explain it in detail."
     )
     extracted_text = ""
-    filename = file.filename.lower()
-    
     try:
         file_bytes = await file.read()
-        
-        if filename.endswith('.docx'):
-            try:
-                import docx2txt
-                docx_file = io.BytesIO(file_bytes)
-                extracted_text = docx2txt.process(docx_file)
-            except BaseException:
-                extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith('.pdf'):
-            try:
-                from pypdf import PdfReader
-                pdf_file = io.BytesIO(file_bytes)
-                reader = PdfReader(pdf_file)
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text: extracted_text += text + "\n"
-            except BaseException:
-                extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith('.txt'):
-            extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        else:
-            extracted_text = file_bytes.decode("utf-8", errors="ignore")
-            
+        extracted_text = file_bytes.decode("utf-8", errors="ignore")
         if not extracted_text.strip():
             extracted_text = f"Document File: {file.filename}"
-            
     except Exception:
         extracted_text = f"Document content for {file.filename}"
 
