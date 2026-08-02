@@ -7,21 +7,21 @@ pymysql = None
 try:
     import pymysql
     import pymysql.cursors
-except Exception:
+except BaseException:
     pymysql = None
 
 mysql_connector = None
 try:
     import mysql.connector
-except Exception:
+except BaseException:
     mysql_connector = None
 
-# Safe import for pg8000 (PostgreSQL)
 pg8000 = None
 try:
-    import pg8000.native
-except Exception:
+    import pg8000
+except BaseException:
     pg8000 = None
+
 
 
 # Persistent JSON Backup path for Vercel Serverless ephemeral /tmp
