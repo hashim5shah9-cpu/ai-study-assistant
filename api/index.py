@@ -89,6 +89,22 @@ class ChatRequest(BaseModel):
     message: str
     email: str = "guest@gmail.com"
 
+class QuizRequest(BaseModel):
+    topic: str
+    email: str = "guest@gmail.com"
+
+class CodeExplanationRequest(BaseModel):
+    code: str
+    language: str = "auto"
+    target_language: str = "Roman Urdu/Hindi"
+    email: str = "guest@gmail.com"
+
+class ImageExplanationRequest(BaseModel):
+    image_base64: str
+    target_language: str = "Roman Urdu/Hindi"
+    custom_prompt: str = ""
+    email: str = "guest@gmail.com"
+
 
 # SIGNUP ENDPOINT
 @app.post("/auth/signup")
@@ -150,8 +166,41 @@ async def login(payload: LoginRequest):
 
 
 # =====================================================================
-# AI ENGINE ENGINES
+# AI ENGINES WITH MULTI-FALLBACK
 # =====================================================================
+def call_direct_gemini_api(prompt_text: str, data_url: str = "") -> str:
+    try:
+        if not GEMINI_KEY or not genai:
+            return "ERROR"
+            
+        client = genai.Client(api_key=GEMINI_KEY)
+        
+        if data_url.strip():
+            if "," in data_url:
+                raw_b64 = data_url.split(",")[1]
+            else:
+                raw_b64 = data_url
+
+            image_bytes = base64.b64decode(raw_b64)
+            image_part = types.Part.from_bytes(
+                data=image_bytes,
+                mime_type="image/jpeg"
+            )
+            contents_payload = [prompt_text, image_part]
+        else:
+            contents_payload = prompt_text
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents_payload
+        )
+        if response and response.text:
+            return response.text
+    except Exception as e:
+        print(f"Direct Gemini Engine Connection Log: {e}")
+    return "ERROR"
+
+
 def call_openrouter_api(messages: list) -> str:
     try:
         if not OPENROUTER_KEY:
@@ -167,7 +216,7 @@ def call_openrouter_api(messages: list) -> str:
                 "model": "google/gemini-2.5-flash",
                 "messages": messages
             },
-            timeout=10
+            timeout=12
         )
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
@@ -193,30 +242,259 @@ def call_groq_api(prompt_text: str) -> str:
     return "ERROR"
 
 
-def get_fallback_ai_response(messages: list, prompt_text: str = "") -> str:
+def call_free_vision_fallback(data_url: str, prompt_text: str) -> str:
+    try:
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": data_url}}
+                    ]
+                }
+            ],
+            "model": "openai"
+        }
+        res = requests.post("https://text.pollinations.ai/", json=payload, timeout=12)
+        if res.status_code == 200 and res.text.strip():
+            return res.text
+    except Exception as e:
+        print(f"Free Fallback Engine Log: {e}")
+    return "ERROR"
+
+
+def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_text: str = "") -> str:
     if not prompt_text:
         prompt_text = "\n\n".join([f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages])
 
+    # 1. Primary Engine: Direct Google Gemini API
+    res = call_direct_gemini_api(prompt_text=prompt_text, data_url=raw_b64_image)
+    if res != "ERROR":
+        return res
+
+    # 2. Secondary Engine: OpenRouter
     res = call_openrouter_api(messages)
     if res != "ERROR":
         return res
 
+    # 3. Tertiary Engine: Groq
     res = call_groq_api(prompt_text)
     if res != "ERROR":
         return res
 
-    return "AI Assistant is active. Please enter your query."
+    # 4. Quaternary Engine: Open Fallback Vision
+    if raw_b64_image:
+        res = call_free_vision_fallback(raw_b64_image, prompt_text)
+        if res != "ERROR":
+            return res
+
+    return "Tamam AI Engines respond nahi kar rahe. Meharbani karke backend credentials check karein."
 
 
-# AI STUDY CHAT
+# 1. AI STUDY CHAT
 @app.post("/ai/study-chat")
 async def study_chat(payload: ChatRequest):
     system_prompt = (
-        "You are an expert AI Study Assistant. Provide clear, structured responses."
+        "You are an expert, friendly AI Study Assistant. Provide highly structured, "
+        "beautiful, and easy-to-read responses using clear formatting rules.\n"
+        "Rules:\n"
+        "1. Use '### Heading Name' for major topics or sub-sections.\n"
+        "2. Use single asterisk bullets '* Keypoint: details' for bullet items.\n"
+        "3. Use '**text**' to bold critical key terms.\n"
+        "4. Always add a newline character between paragraphs and headings to avoid text crowding.\n"
+        "Prioritize scannability and structural hierarchy."
     )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": payload.message}
     ]
-    ai_res = get_fallback_ai_response(messages, prompt_text=payload.message)
+    ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nUser Question: {payload.message}")
     return {"response": ai_res}
+
+
+# 2. AI TEXT SUMMARIZER
+@app.post("/ai/summarize")
+async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail.com")):
+    extracted_text = ""
+    filename = file.filename.lower()
+    
+    try:
+        file_bytes = await file.read()
+        
+        if filename.endswith('.txt'):
+            extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        elif filename.endswith('.pdf') and PdfReader:
+            pdf_file = io.BytesIO(file_bytes)
+            reader = PdfReader(pdf_file)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text: extracted_text += text + "\n"
+        elif (filename.endswith('.ppt') or filename.endswith('.pptx')) and Presentation:
+            ppt_file = io.BytesIO(file_bytes)
+            prs = Presentation(ppt_file)
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        extracted_text += shape.text + "\n"
+        else:
+            extracted_text = file_bytes.decode("utf-8", errors="ignore")
+            
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="File khali hai ya text read nahi ho saka.")
+            
+    except HTTPException as http_ex:
+        raise http_ex
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File reading error: {str(e)}")
+
+    system_prompt = (
+        "You are an expert academic summarizer. Summarize the provided text in simple, clear words."
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Please summarize this text: {extracted_text}"}
+    ]
+    
+    ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nPlease summarize this text:\n{extracted_text}")
+    return {"response": ai_res}
+
+
+# 3. AI QUIZ GENERATOR
+@app.post("/ai/generate-quiz")
+async def generate_quiz(payload: QuizRequest):
+    system_prompt = (
+        "You are an expert quiz master. Generate a quiz with exactly 5 multiple choice questions "
+        "about the requested topic. Your entire response must be a single valid JSON list, "
+        "with absolutely no markdown formatting, no code blocks (like ```json), and no extra text. "
+        "Each object in the list must match this exact format: "
+        '{"question": "Question text here", "a": "Option A", "b": "Option B", "c": "Option C", "d": "Option D", "answer": "a"}'
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Generate a quiz about: {payload.topic}"}
+    ]
+    
+    full_prompt = f"{system_prompt}\n\nGenerate a quiz about: {payload.topic}"
+    ai_raw_res = get_fallback_ai_response(messages, prompt_text=full_prompt)
+    
+    clean_json_str = re.sub(r"```json|```", "", ai_raw_res).strip()
+    
+    try:
+        questions_list = json.loads(clean_json_str)
+    except Exception:
+        # Fallback structured quiz if raw JSON format parsing differs
+        questions_list = [
+            {
+                "question": f"What is a core fundamental concept in {payload.topic}?",
+                "a": "Basic Component Architecture",
+                "b": "Secondary Data Stream",
+                "c": "Null Execution Point",
+                "d": "Random Access Buffer",
+                "answer": "a"
+            },
+            {
+                "question": f"Which principle applies directly to {payload.topic}?",
+                "a": "Data Encapsulation & Logic Processing",
+                "b": "Static Array Termination",
+                "c": "Manual Register Allocation",
+                "d": "Asynchronous Memory Flush",
+                "answer": "a"
+            }
+        ]
+
+    return {"quiz_id": 1, "questions": questions_list}
+
+
+# 4. MULTI-UPLOAD DOCUMENT EXPLAINER
+@app.post("/api/multi-upload-explain")
+async def multi_upload_explain(
+    file: UploadFile = File(...), 
+    email: str = Form("guest@gmail.com")
+):
+    system_prompt = (
+        "You are an advanced AI Academic Assistant. Analyze the provided document content and explain it in detail."
+    )
+    extracted_text = ""
+    filename = file.filename.lower()
+    
+    try:
+        file_bytes = await file.read()
+        
+        if filename.endswith('.docx') and docx2txt:
+            docx_file = io.BytesIO(file_bytes)
+            extracted_text = docx2txt.process(docx_file)
+        elif filename.endswith('.pdf') and PdfReader:
+            pdf_file = io.BytesIO(file_bytes)
+            reader = PdfReader(pdf_file)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text: extracted_text += text + "\n"
+        elif filename.endswith('.txt'):
+            extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        elif (filename.endswith('.ppt') or filename.endswith('.pptx')) and Presentation:
+            ppt_file = io.BytesIO(file_bytes)
+            prs = Presentation(ppt_file)
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        extracted_text += shape.text + "\n"
+        else:
+            extracted_text = file_bytes.decode("utf-8", errors="ignore")
+            
+        if not extracted_text.strip():
+            extracted_text = f"Document File: {file.filename}"
+            
+    except Exception as e:
+        extracted_text = f"Document content for {file.filename}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Explain this document text:\n{extracted_text}"}
+    ]
+    
+    ai_explanation = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nExplain:\n{extracted_text}")
+    return {"explanation": ai_explanation}
+
+
+# 5. CODE EXPLAINER ENDPOINT
+@app.post("/api/explain-code")
+async def explain_code(data: CodeExplanationRequest):
+    if not data.code.strip():
+        raise HTTPException(status_code=400, detail="Code content cannot be empty.")
+
+    system_prompt = (
+        f"You are a World-Class Computer Science Professor. Explain the following source code in target language ({data.target_language}).\n"
+        "Structure:\n"
+        "### 🎯 Purpose & Overview\n"
+        "### 🔬 Line-by-Line Breakdown\n"
+        "### 💡 Practical Analogy\n"
+        "### ⚠️ Best Practices"
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Programming Language: {data.language}\nCode:\n{data.code}"}
+    ]
+    
+    ai_explanation = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nCode:\n{data.code}")
+    return {"explanation": ai_explanation}
+
+
+# 6. IMAGE TO TEXT / EXPLAIN IMAGE ENDPOINT
+@app.post("/api/explain-image")
+async def explain_image(data: ImageExplanationRequest):
+    if not data.image_base64.strip():
+        raise HTTPException(status_code=400, detail="Image content cannot be empty.")
+
+    system_prompt = (
+        f"You are an Expert Multimodal Vision Specialist. Explain the provided image/diagram in detail in ({data.target_language})."
+    )
+
+    raw_b64 = data.image_base64
+    user_text = data.custom_prompt.strip() if data.custom_prompt.strip() else "Please explain this image/diagram."
+    full_prompt = f"{system_prompt}\n\n{user_text}"
+
+    ai_explanation = get_fallback_ai_response([], raw_b64_image=raw_b64, prompt_text=full_prompt)
+    return {"explanation": ai_explanation}
