@@ -8,6 +8,11 @@ import base64
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+try:
+    from mangum import Mangum
+except BaseException:
+    Mangum = None
+
 
 # Safe imports for optional libraries
 try:
@@ -381,3 +386,6 @@ async def login(payload: LoginRequest):
             db.close()
         except Exception:
             pass
+
+handler = Mangum(app) if Mangum else app
+
