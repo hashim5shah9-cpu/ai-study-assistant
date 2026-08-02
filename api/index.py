@@ -5,6 +5,8 @@ import io
 import json
 import re
 import base64
+import zipfile
+import xml.etree.ElementTree as ET
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -20,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory persistent user store for fast serverless execution
 USERS_STORE = {}
 
 def safe_get_db():
@@ -46,6 +47,7 @@ async def health_check():
 # ====================================================
 GROQ_KEY = os.getenv("GROQ_KEY", "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")      
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "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")  
+GEMINI_KEY = os.getenv("GEMINI_KEY", "AQ.Ab8RN6K5igFNFB0ayrDT3fELaPbHUh0eOeZI75jx1-CG2f5AvA")
 
 
 # Request Models
@@ -156,12 +158,155 @@ async def login(payload: LoginRequest):
 
 
 # =====================================================================
-# AI ENGINES WITH MULTI-FALLBACK
+# DOCUMENT TEXT EXTRACTION HELPERS (PDF, DOCX, PPTX, TXT)
 # =====================================================================
-def call_openrouter_api(messages: list) -> str:
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    extracted_text = ""
+    # Method 1: Try pypdf
+    try:
+        from pypdf import PdfReader
+        pdf_file = io.BytesIO(file_bytes)
+        reader = PdfReader(pdf_file)
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                extracted_text += t + "\n"
+        if len(extracted_text.strip()) > 30:
+            return extracted_text.strip()
+    except BaseException:
+        pass
+
+    # Method 2: Pure-Python regex stream extraction (filtering out PDF syntax noise)
+    try:
+        raw_str = file_bytes.decode("latin1", errors="ignore")
+        # Extract text blocks inside parentheses (standard PDF text stream encoding)
+        tj_matches = re.findall(r'\(([^\)]{2,})\)\s*Tj', raw_str)
+        if tj_matches:
+            extracted_text = " ".join(tj_matches)
+            if len(extracted_text.strip()) > 30:
+                return extracted_text.strip()
+        
+        # Fallback: Find readable sentence strings (words >= 4 chars, removing PDF obj syntax)
+        words = re.findall(r'[a-zA-Z0-9.,!?:;\'" -]{4,}', raw_str)
+        filtered = [
+            w.strip() for w in words 
+            if not re.search(r'obj|endobj|stream|endstream|Catalog|Pages|Type|Font|ProcSet|MediaBox|XObject|PDF|Canva|Adobe', w, re.IGNORECASE)
+            and len(w.strip()) > 3
+        ]
+        extracted_text = "\n".join(filtered)
+    except Exception:
+        pass
+
+    return extracted_text.strip()
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    # Method 1: Try docx2txt
+    try:
+        import docx2txt
+        docx_file = io.BytesIO(file_bytes)
+        t = docx2txt.process(docx_file)
+        if t and len(t.strip()) > 10:
+            return t.strip()
+    except BaseException:
+        pass
+
+    # Method 2: Built-in Zip + XML extraction
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            xml_content = z.read('word/document.xml')
+            tree = ET.fromstring(xml_content)
+            texts = [node.text for node in tree.iter() if node.text and node.tag.endswith('t')]
+            return " ".join(texts).strip()
+    except Exception:
+        pass
+
+    return ""
+
+
+def extract_text_from_pptx(file_bytes: bytes) -> str:
+    # Method 1: Try python-pptx
+    try:
+        from pptx import Presentation
+        ppt_file = io.BytesIO(file_bytes)
+        prs = Presentation(ppt_file)
+        text = ""
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text:
+                    text += shape.text + "\n"
+        if len(text.strip()) > 10:
+            return text.strip()
+    except BaseException:
+        pass
+
+    # Method 2: Built-in Zip + XML extraction
+    try:
+        text = ""
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            slide_files = [f for f in z.namelist() if f.startswith('ppt/slides/slide') and f.endswith('.xml')]
+            for sf in sorted(slide_files):
+                xml_content = z.read(sf)
+                tree = ET.fromstring(xml_content)
+                texts = [node.text for node in tree.iter() if node.text and len(node.text.strip()) > 1]
+                if texts:
+                    text += " ".join(texts) + "\n"
+        return text.strip()
+    except Exception:
+        pass
+
+    return ""
+
+
+def extract_document_content(filename: str, file_bytes: bytes) -> str:
+    fname = filename.lower()
+    if fname.endswith('.pdf'):
+        txt = extract_text_from_pdf(file_bytes)
+    elif fname.endswith('.docx') or fname.endswith('.doc'):
+        txt = extract_text_from_docx(file_bytes)
+    elif fname.endswith('.ppt') or fname.endswith('.pptx'):
+        txt = extract_text_from_pptx(file_bytes)
+    else:
+        txt = file_bytes.decode("utf-8", errors="ignore")
+
+    if not txt or len(txt.strip()) < 10:
+        txt = file_bytes.decode("utf-8", errors="ignore")
+        # Clean out obvious PDF obj syntax if fallback occurs
+        txt = re.sub(r'\d+\s+\d+\s+obj.*?:endobj', '', txt, flags=re.DOTALL)
+        txt = re.sub(r'<<.*?>>|stream.*?endstream', '', txt, flags=re.DOTALL)
+        txt = re.sub(r'/[A-Za-z0-9]+\s+', ' ', txt)
+
+    return txt.strip()
+
+
+# =====================================================================
+# AI ENGINES WITH MULTI-FALLBACK & VISION SUPPORT
+# =====================================================================
+def call_openrouter_api(messages: list, raw_b64_image: str = "") -> str:
     try:
         if not OPENROUTER_KEY:
             return "ERROR"
+
+        payload_messages = messages
+        if raw_b64_image:
+            data_url = f"data:image/jpeg;base64,{raw_b64_image}" if not raw_b64_image.startswith("data:") else raw_b64_image
+            user_prompt = ""
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    user_prompt = m.get("content", "")
+                    break
+            if not user_prompt:
+                user_prompt = "Please analyze and explain this image/diagram in detail."
+
+            payload_messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}}
+                    ]
+                }
+            ]
 
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
@@ -171,9 +316,9 @@ def call_openrouter_api(messages: list) -> str:
             },
             json={
                 "model": "google/gemini-2.5-flash",
-                "messages": messages
+                "messages": payload_messages
             },
-            timeout=12
+            timeout=15
         )
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
@@ -233,21 +378,21 @@ def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_tex
     if not prompt_text:
         prompt_text = "\n\n".join([f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages])
 
-    # 1. Primary Engine: OpenRouter (Gemini 2.5 Flash)
-    res = call_openrouter_api(messages)
+    # 1. Primary Engine: OpenRouter (Gemini 2.5 Flash with Multimodal Vision)
+    res = call_openrouter_api(messages, raw_b64_image=raw_b64_image)
     if res != "ERROR":
         return res
 
-    # 2. Secondary Engine: Groq REST API (Llama 3.3 70b)
-    res = call_groq_api(prompt_text)
-    if res != "ERROR":
-        return res
-
-    # 3. Vision Fallback if Image is present
+    # 2. Secondary Engine: Pollinations Vision (if Image is present)
     if raw_b64_image:
         res = call_pollinations_vision_api(raw_b64_image, prompt_text)
         if res != "ERROR":
             return res
+
+    # 3. Tertiary Engine: Groq REST API (for Text)
+    res = call_groq_api(prompt_text)
+    if res != "ERROR":
+        return res
 
     return "AI Assistant is active. Please enter your query."
 
@@ -276,26 +421,27 @@ async def study_chat(payload: ChatRequest):
 # 2. AI TEXT SUMMARIZER
 @app.post("/ai/summarize")
 async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail.com")):
-    extracted_text = ""
-    filename = file.filename.lower()
-    
     try:
         file_bytes = await file.read()
-        extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        extracted_text = extract_document_content(file.filename, file_bytes)
+        
         if not extracted_text.strip():
-            extracted_text = f"Uploaded File: {file.filename}"
-    except Exception:
-        extracted_text = f"Uploaded File: {file.filename}"
+            extracted_text = f"Document File: {file.filename}"
+    except Exception as e:
+        extracted_text = f"Document File: {file.filename}"
 
     system_prompt = (
-        "You are an expert academic summarizer. Summarize the provided text in simple, clear words."
+        "You are an expert academic summarizer.\n"
+        "Your task is to summarize the provided document text in simple, clear, and easy-to-understand words.\n"
+        "Structure your response with clear headings, key takeaways, and bullet points.\n"
+        "Do NOT mention PDF objects, metadata, or file syntax. Focus purely on the actual subject and knowledge in the document."
     )
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Please summarize this text: {extracted_text}"}
+        {"role": "user", "content": f"Please summarize the main content and key knowledge of this document:\n\n{extracted_text}"}
     ]
     
-    ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nPlease summarize this text:\n{extracted_text}")
+    ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nPlease summarize this document:\n{extracted_text}")
     return {"response": ai_res}
 
 
@@ -351,21 +497,28 @@ async def multi_upload_explain(
     file: UploadFile = File(...), 
     email: str = Form("guest@gmail.com")
 ):
-    system_prompt = (
-        "You are an advanced AI Academic Assistant. Analyze the provided document content and explain it in detail."
-    )
-    extracted_text = ""
     try:
         file_bytes = await file.read()
-        extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        extracted_text = extract_document_content(file.filename, file_bytes)
+        
         if not extracted_text.strip():
             extracted_text = f"Document File: {file.filename}"
     except Exception:
         extracted_text = f"Document content for {file.filename}"
 
+    system_prompt = (
+        "You are an advanced AI Academic Assistant specializing in detailed document analysis.\n"
+        "Your task is to thoroughly analyze the provided document content and explain it in deep detail using simple, clear, and highly organized English prose.\n\n"
+        "Formatting Rules:\n"
+        "1. Use '### Heading Name' for major topics or sub-sections.\n"
+        "2. Use single asterisk bullets '* Keypoint: details' for bullet items.\n"
+        "3. Use '**text**' to bold critical key terms.\n"
+        "Do NOT discuss PDF syntax or binary metadata. Focus purely on explaining the academic concepts inside the file."
+    )
+
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Explain this document text:\n{extracted_text}"}
+        {"role": "user", "content": f"Analyze and explain the following extracted document text in plain, clear prose:\n\n{extracted_text}"}
     ]
     
     ai_explanation = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nExplain:\n{extracted_text}")
@@ -402,13 +555,29 @@ async def explain_image(data: ImageExplanationRequest):
     if not data.image_base64.strip():
         raise HTTPException(status_code=400, detail="Image content cannot be empty.")
 
+    if data.target_language == "Roman Urdu/Hindi":
+        lang_rule = "Write the explanation in natural, easy Roman Urdu/Hindi (e.g. 'Yeh image/diagram show kar raha hai...')."
+    else:
+        lang_rule = f"Write the explanation in clear, simple {data.target_language}."
+
     system_prompt = (
-        f"You are an Expert Multimodal Vision Specialist. Explain the provided image/diagram in detail in ({data.target_language})."
+        f"You are an Expert Multimodal Vision Specialist.\n"
+        f"Analyze the attached image/diagram and explain everything inside it in detail.\n"
+        f"{lang_rule}\n\n"
+        "Structure:\n"
+        "### 🎯 Overview & Context\n"
+        "### 🔬 Detailed Component Breakdown\n"
+        "### 💡 Practical Takeaways"
     )
 
     raw_b64 = data.image_base64
-    user_text = data.custom_prompt.strip() if data.custom_prompt.strip() else "Please explain this image/diagram."
+    user_text = data.custom_prompt.strip() if data.custom_prompt.strip() else "Please analyze and explain this image/diagram in detail."
     full_prompt = f"{system_prompt}\n\n{user_text}"
 
-    ai_explanation = get_fallback_ai_response([], raw_b64_image=raw_b64, prompt_text=full_prompt)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_text}
+    ]
+
+    ai_explanation = get_fallback_ai_response(messages, raw_b64_image=raw_b64, prompt_text=full_prompt)
     return {"explanation": ai_explanation}
