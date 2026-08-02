@@ -1314,10 +1314,140 @@ function initActiveUserProfileAndLogout() {
 }
 
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initActiveUserProfileAndLogout);
+    document.addEventListener("DOMContentLoaded", function() {
+        initActiveUserProfileAndLogout();
+        if (typeof window.restoreDashboardState === 'function') {
+            window.restoreDashboardState();
+        }
+    });
 } else {
     initActiveUserProfileAndLogout();
+    if (typeof window.restoreDashboardState === 'function') {
+        window.restoreDashboardState();
+    }
 }
+
+// =====================================================================
+// DASHBOARD FEATURE STATE PERSISTENCE (SAVE & RESTORE ACROSS NAVIGATION)
+// =====================================================================
+window.saveDashboardState = function() {
+    try {
+        const activeTab = document.querySelector('.menu-item.active');
+        if (activeTab && activeTab.getAttribute('data-target')) {
+            localStorage.setItem('dashboard_activeTab', activeTab.getAttribute('data-target'));
+        }
+
+        const chatContainer = document.getElementById('chatMessages') || document.getElementById('chatContainer');
+        if (chatContainer && chatContainer.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_chatHTML', chatContainer.innerHTML);
+        }
+
+        const summaryResult = document.getElementById('summaryResult');
+        if (summaryResult && summaryResult.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_summaryHTML', summaryResult.innerHTML);
+        }
+
+        const quizContainer = document.getElementById('quizContainer') || document.getElementById('quizResult');
+        if (quizContainer && quizContainer.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_quizHTML', quizContainer.innerHTML);
+        }
+
+        const explanationContent = document.getElementById('explanationContent') || document.getElementById('multiUploadResult');
+        if (explanationContent && explanationContent.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_multiUploadHTML', explanationContent.innerHTML);
+        }
+
+        const codeInput = document.getElementById('codeInput');
+        const codeOutput = document.getElementById('codeExplanationOutput');
+        if (codeInput && codeInput.value) {
+            localStorage.setItem('dashboard_codeInputVal', codeInput.value);
+        }
+        if (codeOutput && codeOutput.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_codeOutputHTML', codeOutput.innerHTML);
+        }
+
+        const imageOutput = document.getElementById('imageExplanationOutput');
+        const imagePreviewImg = document.querySelector('#imagePreviewContainer img') || document.querySelector('.image-preview img');
+        if (imageOutput && imageOutput.innerHTML.trim().length > 10) {
+            localStorage.setItem('dashboard_imageOutputHTML', imageOutput.innerHTML);
+        }
+        if (imagePreviewImg && imagePreviewImg.src) {
+            localStorage.setItem('dashboard_imagePreviewSrc', imagePreviewImg.src);
+        }
+    } catch(e) {
+        console.error("Dashboard state save error:", e);
+    }
+};
+
+window.restoreDashboardState = function() {
+    try {
+        const chatHTML = localStorage.getItem('dashboard_chatHTML');
+        const chatContainer = document.getElementById('chatMessages') || document.getElementById('chatContainer');
+        if (chatHTML && chatContainer && chatHTML.trim().length > 10) {
+            chatContainer.innerHTML = chatHTML;
+        }
+
+        const summaryHTML = localStorage.getItem('dashboard_summaryHTML');
+        const summaryResult = document.getElementById('summaryResult');
+        if (summaryHTML && summaryResult && summaryHTML.trim().length > 10) {
+            summaryResult.innerHTML = summaryHTML;
+        }
+
+        const quizHTML = localStorage.getItem('dashboard_quizHTML');
+        const quizContainer = document.getElementById('quizContainer') || document.getElementById('quizResult');
+        if (quizHTML && quizContainer && quizHTML.trim().length > 10) {
+            quizContainer.innerHTML = quizHTML;
+        }
+
+        const multiUploadHTML = localStorage.getItem('dashboard_multiUploadHTML');
+        const explanationContent = document.getElementById('explanationContent') || document.getElementById('multiUploadResult');
+        if (multiUploadHTML && explanationContent && multiUploadHTML.trim().length > 10) {
+            explanationContent.innerHTML = multiUploadHTML;
+            const multiOutputBlock = document.getElementById('multiUploadOutputBlock');
+            if (multiOutputBlock) multiOutputBlock.style.display = 'block';
+        }
+
+        const codeInputVal = localStorage.getItem('dashboard_codeInputVal');
+        const codeHTML = localStorage.getItem('dashboard_codeOutputHTML');
+        const codeInput = document.getElementById('codeInput');
+        const codeOutput = document.getElementById('codeExplanationOutput');
+        if (codeInputVal && codeInput) codeInput.value = codeInputVal;
+        if (codeHTML && codeOutput && codeHTML.trim().length > 10) {
+            codeOutput.innerHTML = codeHTML;
+            const codeOutputBlock = document.getElementById('codeOutputBlock');
+            if (codeOutputBlock) codeOutputBlock.style.display = 'block';
+        }
+
+        const imageHTML = localStorage.getItem('dashboard_imageOutputHTML');
+        const imagePreviewSrc = localStorage.getItem('dashboard_imagePreviewSrc');
+        const imageOutput = document.getElementById('imageExplanationOutput');
+        const imagePreviewImg = document.querySelector('#imagePreviewContainer img') || document.querySelector('.image-preview img');
+        if (imageHTML && imageOutput && imageHTML.trim().length > 10) {
+            imageOutput.innerHTML = imageHTML;
+            const imageOutputBlock = document.getElementById('imageOutputBlock');
+            if (imageOutputBlock) imageOutputBlock.style.display = 'block';
+        }
+        if (imagePreviewSrc && imagePreviewImg) {
+            imagePreviewImg.src = imagePreviewSrc;
+            const previewContainer = document.getElementById('imagePreviewContainer');
+            if (previewContainer) previewContainer.style.display = 'block';
+        }
+
+        const activeTabId = localStorage.getItem('dashboard_activeTab');
+        if (activeTabId) {
+            const menuItem = document.querySelector(`.menu-item[data-target="${activeTabId}"]`);
+            if (menuItem) menuItem.click();
+        }
+    } catch(e) {
+        console.error("Dashboard state restore error:", e);
+    }
+};
+
+window.addEventListener('beforeunload', function() {
+    if (typeof window.saveDashboardState === 'function') {
+        window.saveDashboardState();
+    }
+});
 
 
 
