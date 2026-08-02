@@ -1,0 +1,37 @@
+[
+  {
+    "user_id": 1,
+    "username": "pari",
+    "email": "pari@gmail.com",
+    "password_hash": "pari123",
+    "created_at": "2026-08-01 12:12:07"
+  },
+  {
+    "user_id": 2,
+    "username": "mohsin",
+    "email": "mohsin@gmail.com",
+    "password_hash": "mohsin12",
+    "created_at": "2026-08-01 14:51:20"
+  },
+  {
+    "user_id": 3,
+    "username": "akmal",
+    "email": "akmal@gmail.com",
+    "password_hash": "akmal12",
+    "created_at": "2026-08-01 15:02:00"
+  },
+  {
+    "user_id": 4,
+    "username": "rana",
+    "email": "rana@gmail.com",
+    "password_hash": "rana12",
+    "created_at": "2026-08-02 05:47:18"
+  },
+  {
+    "user_id": 5,
+    "username": "nano",
+    "email": "nano@gmail.com",
+    "password_hash": "nano123",
+    "created_at": "2026-08-02 10:20:53"
+  }
+]
