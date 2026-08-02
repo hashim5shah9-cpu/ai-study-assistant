@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+requests
+groq
+pypdf
+python-pptx
+docx2txt
+google-genai
