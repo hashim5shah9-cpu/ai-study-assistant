@@ -1,38 +1,28 @@
 {
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+      "source": "/auth/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "frontend/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/auth/(.*)",
-      "dest": "/api/index.py"
+      "source": "/ai/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/ai/(.*)",
-      "dest": "/api/index.py"
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
+      "source": "/health",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/health",
-      "dest": "/api/index.py"
+      "source": "/",
+      "destination": "/frontend/index.html"
     },
     {
-      "src": "/",
-      "dest": "/frontend/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/$1"
+      "source": "/(.*)",
+      "destination": "/frontend/$1"
     }
   ]
 }
