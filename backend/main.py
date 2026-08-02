@@ -40,17 +40,12 @@ from database import get_db_connection
 
 app = FastAPI()
 
-# 👇 Ye CORS configuration zaroori hai
+# 1. ⚠️ PEHLE CORS MIDDLEWARE SET KAREIN (Ye Sabse Upar Hona Chahiye)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ai-study-assistant-q7y4.vercel.app",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "*"
-    ],
+    allow_origins=["*"],  # Har domain/origin ko allow karega
     allow_credentials=True,
-    allow_methods=["*"], # POST, GET, OPTIONS sab allow honge
+    allow_methods=["*"],  # OPTIONS, POST, GET sab methods allow honge
     allow_headers=["*"],
 )
 
@@ -749,7 +744,8 @@ async def explain_image(data: ImageExplanationRequest):
 
 
 
-# SIGNUP ENDPOINT
+
+# Request Models
 class SignupRequest(BaseModel):
     username: str
     email: str
@@ -759,6 +755,7 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+# SIGNUP ENDPOINT
 @app.post("/auth/signup")
 async def signup(payload: SignupRequest):
     db = get_db_connection()
@@ -775,6 +772,8 @@ async def signup(payload: SignupRequest):
         db.commit()
         cursor.close()
         return {"message": "Account successfully created!"}
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -801,11 +800,12 @@ async def login(payload: LoginRequest):
             "email": user['email'],
             "username": user['username']
         }
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-
 
 
 if __name__ == "__main__":
