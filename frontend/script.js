@@ -37,16 +37,12 @@
 const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
-        // Local VS Code Live Server testing (e.g. localhost:5500 or 127.0.0.1:5500)
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'http://127.0.0.1:8000';
         }
-        // Local network IP access (e.g. 192.168.x.x)
         if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname)) {
             return `${window.location.protocol}//${hostname}:8000`;
         }
-        // Live Vercel / Remote deployment (e.g. ai-study-assistant-q7y4.vercel.app, mobile, external laptops)
-        // Automatically connects to the serverless backend running on Vercel
         return window.location.origin;
     }
     return '';
@@ -54,6 +50,27 @@ const getBackendUrl = () => {
 
 const BACKEND_URL = getBackendUrl();
 console.log("Connected Backend URL:", BACKEND_URL);
+
+// ====================================================
+// AUTO-LOGIN REDIRECTION FOR LOGGED-IN USERS
+// ====================================================
+(function checkAutoLogin() {
+    try {
+        const userEmail = localStorage.getItem('userEmail');
+        const isLoggedIn = localStorage.getItem('isLoggedIn');
+        const path = window.location.pathname;
+
+        const isLandingPage = path.endsWith('index.html') || path === '/' || path === '' || path.endsWith('/') || path.includes('index.html');
+
+        if (userEmail && (isLoggedIn === 'true' || userEmail.includes('@'))) {
+            if (isLandingPage && !path.includes('dashboard.html')) {
+                console.log("Logged-in session active. Auto-redirecting to dashboard.html...");
+                window.location.replace("dashboard.html");
+            }
+        }
+    } catch(e) {}
+})();
+
 
 
 // Modals Triggering
@@ -144,6 +161,7 @@ window.executeForcedLogin = async function (event) {
             // User states save karein
             localStorage.setItem('userEmail', data.email || emailValue);
             localStorage.setItem('username', data.username || "User");
+            localStorage.setItem('isLoggedIn', 'true');
 
             // Absolute force redirection (Live Server proof)
             window.location.href = "dashboard.html";
@@ -259,10 +277,12 @@ if (signupForm) {
 
 
             if (res.ok) {
-                errorDiv.innerText = "Account ban gaya! Ab login kijiye.";
+                localStorage.setItem('userEmail', emailField.value.trim());
+                localStorage.setItem('username', nameField.value.trim());
+                localStorage.setItem('isLoggedIn', 'true');
+                errorDiv.innerText = "Account ban gaya! Logging in...";
                 errorDiv.style.color = "green";
-                signupForm.reset();
-                alert("Account successfully created! Please login.");
+                window.location.href = "dashboard.html";
             } else {
                 errorDiv.innerText = data.detail || "Signup fail ho gaya.";
                 errorDiv.style.color = "red";
