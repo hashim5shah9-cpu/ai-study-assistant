@@ -11,32 +11,36 @@ from pydantic import BaseModel
 
 try:
     from groq import Groq
-except Exception:
+except BaseException:
     Groq = None
 
 try:
     from pypdf import PdfReader
-except Exception:
+except BaseException:
     PdfReader = None
 
 try:
     from pptx import Presentation
-except Exception:
+except BaseException:
     Presentation = None
 
 try:
     import docx2txt
-except Exception:
+except BaseException:
     docx2txt = None
 
 try:
     from google import genai
     from google.genai import types
-except Exception:
+except BaseException:
     genai = None
     types = None
 
-from database import get_db_connection
+try:
+    from database import get_db_connection
+except BaseException:
+    get_db_connection = lambda: None
+
 
 app = FastAPI()
 
