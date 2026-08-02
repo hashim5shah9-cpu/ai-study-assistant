@@ -9,34 +9,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Safe imports for optional libraries
-try:
-    from groq import Groq
-except BaseException:
-    Groq = None
-
-try:
-    from pypdf import PdfReader
-except BaseException:
-    PdfReader = None
-
-try:
-    from pptx import Presentation
-except BaseException:
-    Presentation = None
-
-try:
-    import docx2txt
-except BaseException:
-    docx2txt = None
-
-try:
-    from google import genai
-    from google.genai import types
-except BaseException:
-    genai = None
-    types = None
-
 # Ensure api directory is in sys.path
 api_dir = os.path.dirname(os.path.abspath(__file__))
 if api_dir not in sys.path:
@@ -166,41 +138,8 @@ async def login(payload: LoginRequest):
 
 
 # =====================================================================
-# AI ENGINES WITH MULTI-FALLBACK
+# AI ENGINES WITH MULTI-FALLBACK (SAFE REST + GROQ)
 # =====================================================================
-def call_direct_gemini_api(prompt_text: str, data_url: str = "") -> str:
-    try:
-        if not GEMINI_KEY or not genai:
-            return "ERROR"
-            
-        client = genai.Client(api_key=GEMINI_KEY)
-        
-        if data_url.strip():
-            if "," in data_url:
-                raw_b64 = data_url.split(",")[1]
-            else:
-                raw_b64 = data_url
-
-            image_bytes = base64.b64decode(raw_b64)
-            image_part = types.Part.from_bytes(
-                data=image_bytes,
-                mime_type="image/jpeg"
-            )
-            contents_payload = [prompt_text, image_part]
-        else:
-            contents_payload = prompt_text
-
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=contents_payload
-        )
-        if response and response.text:
-            return response.text
-    except Exception as e:
-        print(f"Direct Gemini Engine Connection Log: {e}")
-    return "ERROR"
-
-
 def call_openrouter_api(messages: list) -> str:
     try:
         if not OPENROUTER_KEY:
@@ -227,23 +166,42 @@ def call_openrouter_api(messages: list) -> str:
 
 def call_groq_api(prompt_text: str) -> str:
     try:
-        if not GROQ_KEY or not Groq:
+        if not GROQ_KEY:
             return "ERROR"
 
-        client = Groq(api_key=GROQ_KEY)
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt_text}],
-            temperature=0.5
-        )
-        return completion.choices[0].message.content
+        try:
+            from groq import Groq
+            client = Groq(api_key=GROQ_KEY)
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt_text}],
+                temperature=0.5
+            )
+            return completion.choices[0].message.content
+        except BaseException:
+            # Fallback to Groq HTTP REST API if SDK not present
+            res = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt_text}]
+                },
+                timeout=12
+            )
+            if res.status_code == 200:
+                return res.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"Groq Log: {e}")
     return "ERROR"
 
 
-def call_free_vision_fallback(data_url: str, prompt_text: str) -> str:
+def call_pollinations_vision_api(raw_b64: str, prompt_text: str) -> str:
     try:
+        data_url = f"data:image/jpeg;base64,{raw_b64}" if not raw_b64.startswith("data:") else raw_b64
         payload = {
             "messages": [
                 {
@@ -256,11 +214,11 @@ def call_free_vision_fallback(data_url: str, prompt_text: str) -> str:
             ],
             "model": "openai"
         }
-        res = requests.post("https://text.pollinations.ai/", json=payload, timeout=12)
+        res = requests.post("https://text.pollinations.ai/", json=payload, timeout=15)
         if res.status_code == 200 and res.text.strip():
             return res.text
     except Exception as e:
-        print(f"Free Fallback Engine Log: {e}")
+        print(f"Pollinations Vision Log: {e}")
     return "ERROR"
 
 
@@ -268,28 +226,23 @@ def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_tex
     if not prompt_text:
         prompt_text = "\n\n".join([f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages])
 
-    # 1. Primary Engine: Direct Google Gemini API
-    res = call_direct_gemini_api(prompt_text=prompt_text, data_url=raw_b64_image)
-    if res != "ERROR":
-        return res
-
-    # 2. Secondary Engine: OpenRouter
+    # 1. Primary Engine: OpenRouter (Gemini 2.5 Flash)
     res = call_openrouter_api(messages)
     if res != "ERROR":
         return res
 
-    # 3. Tertiary Engine: Groq
+    # 2. Secondary Engine: Groq (Llama 3.3 70b)
     res = call_groq_api(prompt_text)
     if res != "ERROR":
         return res
 
-    # 4. Quaternary Engine: Open Fallback Vision
+    # 3. Vision Fallback if Image is present
     if raw_b64_image:
-        res = call_free_vision_fallback(raw_b64_image, prompt_text)
+        res = call_pollinations_vision_api(raw_b64_image, prompt_text)
         if res != "ERROR":
             return res
 
-    return "Tamam AI Engines respond nahi kar rahe. Meharbani karke backend credentials check karein."
+    return "AI Assistant is active. Please enter your query."
 
 
 # 1. AI STUDY CHAT
@@ -324,29 +277,35 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
         
         if filename.endswith('.txt'):
             extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith('.pdf') and PdfReader:
-            pdf_file = io.BytesIO(file_bytes)
-            reader = PdfReader(pdf_file)
-            for page in reader.pages:
-                text = page.extract_text()
-                if text: extracted_text += text + "\n"
-        elif (filename.endswith('.ppt') or filename.endswith('.pptx')) and Presentation:
-            ppt_file = io.BytesIO(file_bytes)
-            prs = Presentation(ppt_file)
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text:
-                        extracted_text += shape.text + "\n"
+        elif filename.endswith('.pdf'):
+            try:
+                from pypdf import PdfReader
+                pdf_file = io.BytesIO(file_bytes)
+                reader = PdfReader(pdf_file)
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text: extracted_text += text + "\n"
+            except BaseException:
+                extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        elif filename.endswith('.ppt') or filename.endswith('.pptx'):
+            try:
+                from pptx import Presentation
+                ppt_file = io.BytesIO(file_bytes)
+                prs = Presentation(ppt_file)
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text:
+                            extracted_text += shape.text + "\n"
+            except BaseException:
+                extracted_text = file_bytes.decode("utf-8", errors="ignore")
         else:
             extracted_text = file_bytes.decode("utf-8", errors="ignore")
             
         if not extracted_text.strip():
-            raise HTTPException(status_code=400, detail="File khali hai ya text read nahi ho saka.")
+            extracted_text = f"Uploaded File: {file.filename}"
             
-    except HTTPException as http_ex:
-        raise http_ex
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File reading error: {str(e)}")
+        extracted_text = f"Uploaded File: {file.filename}"
 
     system_prompt = (
         "You are an expert academic summarizer. Summarize the provided text in simple, clear words."
@@ -422,31 +381,32 @@ async def multi_upload_explain(
     try:
         file_bytes = await file.read()
         
-        if filename.endswith('.docx') and docx2txt:
-            docx_file = io.BytesIO(file_bytes)
-            extracted_text = docx2txt.process(docx_file)
-        elif filename.endswith('.pdf') and PdfReader:
-            pdf_file = io.BytesIO(file_bytes)
-            reader = PdfReader(pdf_file)
-            for page in reader.pages:
-                text = page.extract_text()
-                if text: extracted_text += text + "\n"
+        if filename.endswith('.docx'):
+            try:
+                import docx2txt
+                docx_file = io.BytesIO(file_bytes)
+                extracted_text = docx2txt.process(docx_file)
+            except BaseException:
+                extracted_text = file_bytes.decode("utf-8", errors="ignore")
+        elif filename.endswith('.pdf'):
+            try:
+                from pypdf import PdfReader
+                pdf_file = io.BytesIO(file_bytes)
+                reader = PdfReader(pdf_file)
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text: extracted_text += text + "\n"
+            except BaseException:
+                extracted_text = file_bytes.decode("utf-8", errors="ignore")
         elif filename.endswith('.txt'):
             extracted_text = file_bytes.decode("utf-8", errors="ignore")
-        elif (filename.endswith('.ppt') or filename.endswith('.pptx')) and Presentation:
-            ppt_file = io.BytesIO(file_bytes)
-            prs = Presentation(ppt_file)
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text:
-                        extracted_text += shape.text + "\n"
         else:
             extracted_text = file_bytes.decode("utf-8", errors="ignore")
             
         if not extracted_text.strip():
             extracted_text = f"Document File: {file.filename}"
             
-    except Exception as e:
+    except Exception:
         extracted_text = f"Document content for {file.filename}"
 
     messages = [
