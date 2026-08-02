@@ -35,16 +35,21 @@
 // console.log("Current Active Backend URL:", BACKEND_URL);
 
 const getBackendUrl = () => {
-    // Check if running locally (VS Code Live Server)
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
+        // Local VS Code Live Server testing (e.g. localhost:5500 or 127.0.0.1:5500)
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            // Local testing ke liye local backend use karein
             return 'http://127.0.0.1:8000';
         }
+        // Local network IP access (e.g. 192.168.x.x)
+        if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname)) {
+            return `${window.location.protocol}//${hostname}:8000`;
+        }
+        // Live Vercel / Remote deployment (e.g. ai-study-assistant-q7y4.vercel.app, mobile, external laptops)
+        // Automatically connects to the serverless backend running on Vercel
+        return window.location.origin;
     }
-    // Vercel, Mobiles, and external PCs ke liye Always Live PythonAnywhere Backend
-    return 'https://asad0978.pythonanywhere.com';
+    return '';
 };
 
 const BACKEND_URL = getBackendUrl();
