@@ -538,7 +538,7 @@ def call_groq_api(prompt_text: str) -> str:
                     "model": "llama-3.3-70b-versatile",
                     "messages": [{"role": "user", "content": prompt_text}]
                 },
-                timeout=7
+                timeout=8
             )
             if res.status_code == 200:
                 res_data = res.json()
@@ -568,18 +568,18 @@ def get_fallback_ai_response(messages: list, raw_b64_image: str = "", prompt_tex
             return res
 
     # TEXT-ONLY WORKFLOW WITH MULTI-KEY ROTATION POOL:
-    # 1. OpenRouter Key Pool (Gemini 2.5 Flash / Free models)
+    # 1. Groq Key Pool (Llama 3.3 70B - World Class Deep Academic Explanations & Summaries)
+    res = call_groq_api(prompt_text)
+    if res != "ERROR" and res.strip():
+        return res
+
+    # 2. OpenRouter Key Pool (Gemini 2.5 Flash / Free models)
     res = call_openrouter_api(messages, raw_b64_image="")
     if res != "ERROR" and res.strip():
         return res
 
-    # 2. Keyless Free Pollinations Engine
+    # 3. Keyless Free Pollinations Engine
     res = call_pollinations_text_api(prompt_text)
-    if res != "ERROR" and res.strip():
-        return res
-
-    # 3. Groq Key Pool (Llama 3.3 70b)
-    res = call_groq_api(prompt_text)
     if res != "ERROR" and res.strip():
         return res
 
@@ -622,27 +622,33 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
         extracted_text = ""
 
     if not extracted_text or len(extracted_text.strip()) < 10:
-        extracted_text = f"Document File: {file.filename}\nThis document contains academic study materials and notes."
+        extracted_text = f"Document File: {file.filename}\nThis document contains academic study materials, notes, and textbook content."
 
-    truncated_text = extracted_text[:3000]
+    truncated_text = extracted_text[:10000]
 
     system_prompt = (
-        "You are an expert academic summarizer.\n"
-        "Your task is to summarize the provided document text in simple, clear, and easy-to-understand words.\n"
-        "Structure your response with clear headings (### Heading), key takeaways (* bullet), and bullet points.\n"
-        "MANDATE: Ignore any PDF structural codes or metadata tags. Focus purely on explaining the educational topics and subject matter."
+        "You are a World-Class Academic Professor and Master Document Summarizer.\n"
+        "Your task is to thoroughly analyze the uploaded document content and explain all the educational concepts in simple, crystal-clear, and comprehensive terms.\n\n"
+        "Required Response Formatting:\n"
+        "### 🎯 Document Overview & Core Subject\n"
+        "### 🔬 Comprehensive Topic-by-Topic Breakdown\n"
+        "### 💡 Key Academic Takeaways\n"
+        "### 📝 Important Terms & Definitions\n\n"
+        "MANDATE: Completely ignore any PDF structural tags or font metadata. Focus 100% on providing a deep, rich, step-by-step educational breakdown that makes the document very easy to study."
     )
+    
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Please summarize the educational content of this document:\n\n{truncated_text}"}
+        {"role": "user", "content": f"Please thoroughly analyze and summarize the educational content of this document ({file.filename}):\n\n{truncated_text}"}
     ]
     
-    ai_res = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nPlease summarize this document:\n{truncated_text}")
+    full_prompt = f"{system_prompt}\n\nPlease thoroughly analyze and summarize the educational content of this document ({file.filename}):\n\n{truncated_text}"
+    ai_res = get_fallback_ai_response(messages, prompt_text=full_prompt)
     
     if not ai_res or ai_res == "ERROR" or "AI Assistant is active" in ai_res:
         lines = [l.strip() for l in truncated_text.split('\n') if len(l.strip()) > 15]
-        bullets = "\n".join([f"* {line}" for line in lines[:8]]) if lines else f"* Document {file.filename} contains key academic notes and study materials."
-        ai_res = f"### 📄 Document Summary ({file.filename})\n\n**Key Takeaways & Points:**\n{bullets}\n\n* **Overview**: The document provides structured information for study and revision."
+        bullets = "\n".join([f"* {line}" for line in lines[:10]]) if lines else f"* Document {file.filename} contains key academic notes and study materials."
+        ai_res = f"### 📄 Document Summary ({file.filename})\n\n**Core Subject Matter & Takeaways:**\n{bullets}\n\n* **Overview**: The document provides structured information for study and revision."
 
     # SAVE OUTPUT TO DATABASE
     save_output_to_db("summarize", email, {"file_name": file.filename, "summary": ai_res})
@@ -714,11 +720,11 @@ async def multi_upload_explain(
     if not extracted_text or len(extracted_text.strip()) < 10:
         extracted_text = f"Document File: {file.filename}\nThis document contains academic study materials."
 
-    truncated_text = extracted_text[:3000]
+    truncated_text = extracted_text[:10000]
 
     system_prompt = (
         "You are an advanced AI Academic Assistant specializing in detailed document analysis.\n"
-        "Your task is to thoroughly analyze the provided document content and explain it in deep detail using simple, clear English prose.\n\n"
+        "Your task is to thoroughly analyze the provided document content and explain it in deep detail using simple, clear prose.\n\n"
         "Formatting Rules:\n"
         "1. Use '### Heading Name' for major topics or sub-sections.\n"
         "2. Use single asterisk bullets '* Keypoint: details' for bullet items.\n"
