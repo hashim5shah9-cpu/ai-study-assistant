@@ -494,6 +494,191 @@ if (summarizeBtn) {
 // ====================================================
 // QUIZ GENERATOR WORKING LOGIC
 // ====================================================
+
+// Track asked questions to avoid repeats
+let askedQuestions = [];
+let currentQuizTopic = '';
+let quizRoundNumber = 1;
+
+function renderQuizQuestions(questions, topic, resultDiv, isMoreRound) {
+    currentQuizTopic = topic;
+    const roundLabel = isMoreRound ? `Round ${quizRoundNumber} — Extra Questions` : 'Initial Quiz';
+    const questionsCount = questions.length;
+
+    let quizHTML = `
+        <div style="background: linear-gradient(135deg, #1e3a8a, #2563eb); color: white; padding: 14px 18px; border-radius: 10px; margin-bottom: 18px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:13px; opacity:0.8;">📚 Topic: <strong>${topic}</strong></div>
+                <div style="font-size:11px; opacity:0.7; margin-top:3px;">${roundLabel} • ${questionsCount} Questions</div>
+            </div>
+            <div style="font-size:22px;">🧠</div>
+        </div>
+        <form id="interactiveQuizForm">
+    `;
+
+    questions.forEach((q, index) => {
+        quizHTML += `
+            <div class="quiz-question-block" id="qblock_${index}" style="margin-bottom:18px; background:#fff; padding:16px; border-radius:10px; border-left:4px solid #2563eb; box-shadow:0 2px 8px rgba(0,0,0,0.07);">
+                <p style="font-weight:700; margin-bottom:12px; color:#1e293b; font-size:15px;">Q${index + 1}: ${q.question}</p>
+                <label style="display:flex; align-items:center; gap:10px; margin:8px 0; cursor:pointer; padding:8px 12px; border-radius:7px; border:2px solid #e2e8f0; transition:border-color 0.2s;" id="opt_${index}_a">
+                    <input type="radio" name="q_${index}" value="a" style="accent-color:#2563eb; width:16px; height:16px;"> <span>A) ${q.a}</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; margin:8px 0; cursor:pointer; padding:8px 12px; border-radius:7px; border:2px solid #e2e8f0; transition:border-color 0.2s;" id="opt_${index}_b">
+                    <input type="radio" name="q_${index}" value="b" style="accent-color:#2563eb; width:16px; height:16px;"> <span>B) ${q.b}</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; margin:8px 0; cursor:pointer; padding:8px 12px; border-radius:7px; border:2px solid #e2e8f0; transition:border-color 0.2s;" id="opt_${index}_c">
+                    <input type="radio" name="q_${index}" value="c" style="accent-color:#2563eb; width:16px; height:16px;"> <span>C) ${q.c}</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; margin:8px 0; cursor:pointer; padding:8px 12px; border-radius:7px; border:2px solid #e2e8f0; transition:border-color 0.2s;" id="opt_${index}_d">
+                    <input type="radio" name="q_${index}" value="d" style="accent-color:#2563eb; width:16px; height:16px;"> <span>D) ${q.d}</span>
+                </label>
+                <input type="hidden" id="ans_${index}" value="${q.answer}">
+            </div>
+        `;
+        // Track asked questions
+        if (!askedQuestions.includes(q.question)) {
+            askedQuestions.push(q.question);
+        }
+    });
+
+    quizHTML += `
+        <button type="submit" id="submitQuizBtn" style="width:100%; padding:14px; background:linear-gradient(135deg, #10b981, #059669); color:white; border:none; border-radius:10px; font-size:16px; font-weight:700; cursor:pointer; margin-top:8px; transition:opacity 0.2s;">
+            ✅ Submit Quiz Answers
+        </button>
+        </form>
+        <div id="quizScoreResult" style="margin-top:15px;"></div>
+    `;
+
+    resultDiv.innerHTML = quizHTML;
+
+    // Add hover effect on options
+    resultDiv.querySelectorAll('label[id^="opt_"]').forEach(label => {
+        label.addEventListener('mouseenter', () => {
+            if (!label.classList.contains('locked')) label.style.borderColor = '#2563eb';
+        });
+        label.addEventListener('mouseleave', () => {
+            if (!label.classList.contains('locked')) label.style.borderColor = '#e2e8f0';
+        });
+    });
+
+    // Form Submit - Score Evaluation + Feedback
+    document.getElementById('interactiveQuizForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        let score = 0;
+        const total = questions.length;
+        let allAnswered = true;
+
+        questions.forEach((q, index) => {
+            const selected = document.querySelector(`input[name="q_${index}"]:checked`);
+            if (!selected) { allAnswered = false; return; }
+
+            const correctOpt = q.answer.toLowerCase().trim();
+            const selectedOpt = selected.value.toLowerCase().trim();
+            const isCorrect = selectedOpt === correctOpt;
+            if (isCorrect) score++;
+
+            // Lock all options for this question
+            ['a','b','c','d'].forEach(opt => {
+                const lbl = document.getElementById(`opt_${index}_${opt}`);
+                if (!lbl) return;
+                lbl.classList.add('locked');
+                lbl.style.cursor = 'not-allowed';
+                lbl.querySelector('input').disabled = true;
+
+                if (opt === correctOpt) {
+                    lbl.style.background = '#d1fae5';
+                    lbl.style.borderColor = '#10b981';
+                    lbl.style.color = '#065f46';
+                }
+                if (opt === selectedOpt && !isCorrect) {
+                    lbl.style.background = '#fee2e2';
+                    lbl.style.borderColor = '#ef4444';
+                    lbl.style.color = '#991b1b';
+                }
+            });
+
+            // Show correct answer label
+            const qBlock = document.getElementById(`qblock_${index}`);
+            const feedbackEl = document.createElement('div');
+            feedbackEl.style.cssText = `margin-top:8px; font-size:13px; font-weight:600; padding:6px 10px; border-radius:6px; ${isCorrect ? 'background:#d1fae5; color:#065f46;' : 'background:#fff7ed; color:#9a3412;'}`;
+            feedbackEl.innerHTML = isCorrect
+                ? '✅ Sahi Jawab!'
+                : `❌ Ghalat! Sahi jawab: <strong>${correctOpt.toUpperCase()}) ${q[correctOpt]}</strong>`;
+            qBlock.appendChild(feedbackEl);
+        });
+
+        if (!allAnswered) {
+            alert('Meharbani karke sabhi questions ka jawab dein pehle!');
+            return;
+        }
+
+        // Disable submit button
+        const submitBtn = document.getElementById('submitQuizBtn');
+        if (submitBtn) submitBtn.style.display = 'none';
+
+        // Score percentage
+        const percent = Math.round((score / total) * 100);
+        const emoji = percent === 100 ? '🏆' : percent >= 70 ? '🌟' : percent >= 40 ? '💪' : '📖';
+        const msgColor = percent >= 70 ? '#065f46' : percent >= 40 ? '#92400e' : '#991b1b';
+        const msgBg = percent >= 70 ? '#d1fae5' : percent >= 40 ? '#fef3c7' : '#fee2e2';
+        const encouragement = percent === 100 ? 'Perfect score! Shabash!' : percent >= 70 ? 'Bohat acha kiya!' : percent >= 40 ? 'Thori aur mehnat karo!' : 'Dobara practice karo!';
+
+        const scoreHTML = `
+            <div style="background:${msgBg}; border-radius:14px; padding:20px; text-align:center; margin-top:10px; border:2px solid ${msgColor}30;">
+                <div style="font-size:42px;">${emoji}</div>
+                <div style="font-size:26px; font-weight:800; color:${msgColor}; margin:8px 0;">${score} / ${total}</div>
+                <div style="font-size:15px; color:${msgColor}; font-weight:600;">${encouragement}</div>
+                <div style="font-size:13px; color:#64748b; margin-top:6px;">Score: ${percent}%</div>
+            </div>
+            <button id="moreQuizBtn" style="width:100%; padding:14px; background:linear-gradient(135deg, #7c3aed, #6d28d9); color:white; border:none; border-radius:10px; font-size:16px; font-weight:700; cursor:pointer; margin-top:14px; display:flex; align-items:center; justify-content:center; gap:10px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                🔥 More Quiz — 10 Naye MCQs (Same Topic)
+            </button>
+        `;
+
+        document.getElementById('quizScoreResult').innerHTML = scoreHTML;
+
+        // Scroll to score
+        document.getElementById('quizScoreResult').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // More Quiz Button Handler
+        document.getElementById('moreQuizBtn').addEventListener('click', async function () {
+            this.innerHTML = '⏳ 10 Naye MCQs Generate Ho Rahe Hain...';
+            this.disabled = true;
+            quizRoundNumber++;
+
+            try {
+                const moreRes = await fetch(`${BACKEND_URL}/ai/generate-quiz-more`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        topic: currentQuizTopic,
+                        email: localStorage.getItem('userEmail') || 'guest@gmail.com',
+                        count: 10,
+                        exclude_questions: askedQuestions.slice(-20)
+                    })
+                });
+
+                const moreData = await moreRes.json();
+
+                if (moreRes.ok && moreData.questions && moreData.questions.length > 0) {
+                    // Scroll to top of quiz result
+                    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    setTimeout(() => {
+                        renderQuizQuestions(moreData.questions, currentQuizTopic, resultDiv, true);
+                    }, 400);
+                } else {
+                    this.innerHTML = '❌ Error. Dobara try karein.';
+                    this.disabled = false;
+                }
+            } catch (err) {
+                this.innerHTML = '❌ Server Error. Dobara try karein.';
+                this.disabled = false;
+            }
+        });
+    });
+}
+
 const quizBtn = document.getElementById('quizBtn');
 if (quizBtn) {
     quizBtn.addEventListener('click', async function () {
@@ -506,7 +691,17 @@ if (quizBtn) {
             return;
         }
 
-        resultDiv.innerHTML = "<b>AI aapke liye real-time MCQs test taiyar kar raha hai... Please wait.</b>";
+        // Reset tracking for new topic
+        askedQuestions = [];
+        quizRoundNumber = 1;
+        currentQuizTopic = topic;
+
+        resultDiv.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px; padding:16px; background:#f1f5f9; border-radius:10px;">
+                <div style="width:24px; height:24px; border:3px solid #2563eb; border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+                <span style="color:#1e3a8a; font-weight:600;">AI aapke liye <strong>${topic}</strong> topic par MCQs taiyar kar raha hai...</span>
+            </div>
+        `;
 
         try {
             const res = await fetch(`${BACKEND_URL}/ai/generate-quiz`, {
@@ -521,48 +716,7 @@ if (quizBtn) {
             const data = await res.json();
 
             if (res.ok && data.questions && data.questions.length > 0) {
-                let quizHTML = `<form id="interactiveQuizForm" style="margin-top:15px;">`;
-
-                data.questions.forEach((q, index) => {
-                    quizHTML += `
-                        <div class="quiz-question-block" style="margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb;">
-                            <p style="font-weight: 600; margin-bottom: 10px;">Q${index + 1}: ${q.question}</p>
-                            <label style="display:block; margin: 6px 0; cursor:pointer;"><input type="radio" name="q_${index}" value="a" required> A) ${q.a}</label>
-                            <label style="display:block; margin: 6px 0; cursor:pointer;"><input type="radio" name="q_${index}" value="b"> B) ${q.b}</label>
-                            <label style="display:block; margin: 6px 0; cursor:pointer;"><input type="radio" name="q_${index}" value="c"> C) ${q.c}</label>
-                            <label style="display:block; margin: 6px 0; cursor:pointer;"><input type="radio" name="q_${index}" value="d"> D) ${q.d}</label>
-                            <input type="hidden" id="ans_${index}" value="${q.answer}">
-                        </div>
-                    `;
-                });
-
-                quizHTML += `
-                    <button type="submit" class="btn-feature-action" style="background:#10b981; margin-top:10px;">Submit Quiz Answers</button>
-                    </form>
-                    <div id="quizScoreResult" style="margin-top:15px; font-size:18px; font-weight:bold; color:#1e3a8a;"></div>
-                `;
-
-                resultDiv.innerHTML = quizHTML;
-
-                // Form Submit Score Evaluation Handler
-                document.getElementById('interactiveQuizForm').addEventListener('submit', function (e) {
-                    e.preventDefault();
-                    let score = 0;
-                    const total = data.questions.length;
-
-                    data.questions.forEach((q, index) => {
-                        const selectedOption = document.querySelector(`input[name="q_${index}"]:checked`).value;
-                        const correctOption = document.getElementById(`ans_${index}`).value.toLowerCase().trim();
-
-                        if (selectedOption === correctOption) {
-                            score++;
-                        }
-                    });
-
-                    document.getElementById('quizScoreResult').innerHTML = `Aapka Score: ${score} / ${total} 🎉`;
-                    alert(`Quiz finished! You scored ${score}/${total}`);
-                });
-
+                renderQuizQuestions(data.questions, topic, resultDiv, false);
             } else {
                 resultDiv.innerHTML = `<span style="color:red;">Error: Quiz generate nahi ho saka. Dobara koshish karein.</span>`;
             }
@@ -571,6 +725,7 @@ if (quizBtn) {
         }
     });
 }
+
 
 
 // ====================================================

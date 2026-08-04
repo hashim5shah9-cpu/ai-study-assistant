@@ -714,52 +714,77 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
 
 
 # 3. AI QUIZ GENERATOR
+class QuizRequestExtended(BaseModel):
+    topic: str
+    email: str = "guest@gmail.com"
+    count: int = 5  # 5 for initial, 10 for "More Quiz"
+    exclude_questions: list = []  # Previously asked questions to avoid repeats
+
 @app.post("/ai/generate-quiz")
 async def generate_quiz(payload: QuizRequest):
+    # Use the same logic as extended endpoint with default 5 questions
+    num_questions = 5
     system_prompt = (
-        "You are an expert quiz master. Generate a quiz with exactly 5 multiple choice questions "
+        f"You are an expert quiz master. Generate EXACTLY {num_questions} unique multiple choice questions "
         "about the requested topic. Your entire response must be a single valid JSON list, "
         "with absolutely no markdown formatting, no code blocks (like ```json), and no extra text. "
         "Each object in the list must match this exact format: "
         '{"question": "Question text here", "a": "Option A", "b": "Option B", "c": "Option C", "d": "Option D", "answer": "a"}'
     )
-    
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Generate a quiz about: {payload.topic}"}
+        {"role": "user", "content": f"Generate {num_questions} quiz questions about: {payload.topic}"}
     ]
-    
-    full_prompt = f"{system_prompt}\n\nGenerate a quiz about: {payload.topic}"
+    full_prompt = f"{system_prompt}\n\nGenerate {num_questions} quiz questions about: {payload.topic}"
     ai_raw_res = get_fallback_ai_response(messages, prompt_text=full_prompt)
+    clean_json_str = re.sub(r"```json|```", "", ai_raw_res).strip()
+    try:
+        questions_list = json.loads(clean_json_str)
+    except Exception:
+        questions_list = [{"question": f"What is a core fundamental concept in {payload.topic}?", "a": "Basic Architecture", "b": "Secondary Data", "c": "Null Point", "d": "Random Buffer", "answer": "a"}]
+    save_output_to_db("quiz", payload.email, {"topic": payload.topic, "questions": questions_list})
+    return {"quiz_id": 1, "questions": questions_list}
+
+
+@app.post("/ai/generate-quiz-more")
+async def generate_quiz_more(payload: QuizRequestExtended):
+    """Generate more quiz questions (10 by default) on same topic, avoiding repeats."""
+    num_questions = max(5, min(payload.count, 15))  # Clamp between 5-15
     
+    exclude_note = ""
+    if payload.exclude_questions:
+        exclude_list = "\n".join([f"- {q}" for q in payload.exclude_questions[:20]])
+        exclude_note = f"\n\nIMPORTANT: Do NOT repeat any of these previously asked questions:\n{exclude_list}"
+
+    system_prompt = (
+        f"You are an expert quiz master. Generate EXACTLY {num_questions} NEW and UNIQUE multiple choice questions "
+        f"about the topic: '{payload.topic}'. Cover different sub-topics and angles than before. "
+        "Your entire response must be a single valid JSON list, "
+        "with absolutely no markdown formatting, no code blocks (like ```json), and no extra text. "
+        "Each object in the list must match this exact format: "
+        '{"question": "Question text here", "a": "Option A", "b": "Option B", "c": "Option C", "d": "Option D", "answer": "a"}'
+    )
+
+    user_msg = f"Generate {num_questions} fresh quiz questions about: {payload.topic}.{exclude_note}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_msg}
+    ]
+    full_prompt = f"{system_prompt}\n\n{user_msg}"
+    ai_raw_res = get_fallback_ai_response(messages, prompt_text=full_prompt)
     clean_json_str = re.sub(r"```json|```", "", ai_raw_res).strip()
     
     try:
         questions_list = json.loads(clean_json_str)
     except Exception:
         questions_list = [
-            {
-                "question": f"What is a core fundamental concept in {payload.topic}?",
-                "a": "Basic Component Architecture",
-                "b": "Secondary Data Stream",
-                "c": "Null Execution Point",
-                "d": "Random Access Buffer",
-                "answer": "a"
-            },
-            {
-                "question": f"Which principle applies directly to {payload.topic}?",
-                "a": "Data Encapsulation & Logic Processing",
-                "b": "Static Array Termination",
-                "c": "Manual Register Allocation",
-                "d": "Asynchronous Memory Flush",
-                "answer": "a"
-            }
+            {"question": f"Which advanced concept is key to {payload.topic}?", "a": "Advanced Pattern", "b": "Base Syntax", "c": "Null Reference", "d": "Static Block", "answer": "a"},
+            {"question": f"How does {payload.topic} relate to real-world systems?", "a": "Through abstraction layers", "b": "Via random access", "c": "Using static memory", "d": "Through null pointers", "answer": "a"}
         ]
 
-    # SAVE OUTPUT TO DATABASE
     save_output_to_db("quiz", payload.email, {"topic": payload.topic, "questions": questions_list})
-
-    return {"quiz_id": 1, "questions": questions_list}
+    return {"quiz_id": 2, "questions": questions_list}
 
 
 # 4. MULTI-UPLOAD DOCUMENT EXPLAINER
