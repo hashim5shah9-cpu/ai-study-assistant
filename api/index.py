@@ -286,8 +286,21 @@ def clean_pdf_metadata_junk(text: str) -> str:
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     extracted_text_list = []
-    
-    # 1. Try pypdf
+
+    # 1. Try pdfminer.six (pure Python - best Vercel compatibility)
+    try:
+        from pdfminer.high_level import extract_text as pdfminer_extract
+        from pdfminer.layout import LAParams
+        text = pdfminer_extract(
+            io.BytesIO(file_bytes),
+            laparams=LAParams(line_overlap=0.5, char_margin=2.0)
+        )
+        if text and len(text.strip()) > 50:
+            return clean_pdf_metadata_junk(text.strip())
+    except Exception as e:
+        print(f"pdfminer extraction failed: {e}")
+
+    # 2. Try pypdf
     try:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(file_bytes))
@@ -360,20 +373,28 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
+    # 1. Try python-docx (proper library)
     try:
-        import docx2txt
-        t = docx2txt.process(io.BytesIO(file_bytes))
-        if t and len(t.strip()) > 10:
-            return t.strip()
-    except BaseException:
-        pass
+        from docx import Document
+        doc = Document(io.BytesIO(file_bytes))
+        paragraphs = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+        if paragraphs:
+            return "\n".join(paragraphs).strip()
+    except Exception as e:
+        print(f"python-docx failed: {e}")
 
+    # 2. Fallback: Raw XML extraction from .docx zip
     try:
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
             xml_content = z.read('word/document.xml')
             tree = ET.fromstring(xml_content)
-            texts = [node.text for node in tree.iter() if node.text and node.tag.endswith('t')]
-            return " ".join(texts).strip()
+            ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+            texts = []
+            for elem in tree.iter(f'{ns}t'):
+                if elem.text:
+                    texts.append(elem.text)
+            if texts:
+                return " ".join(texts).strip()
     except Exception:
         pass
 
@@ -381,30 +402,37 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
 
 
 def extract_text_from_pptx(file_bytes: bytes) -> str:
+    # 1. Try python-pptx (proper library)
     try:
         from pptx import Presentation
         prs = Presentation(io.BytesIO(file_bytes))
-        text = ""
+        texts = []
         for slide in prs.slides:
             for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text:
-                    text += shape.text + "\n"
-        if len(text.strip()) > 10:
-            return text.strip()
-    except BaseException:
-        pass
+                if hasattr(shape, "text_frame"):
+                    for para in shape.text_frame.paragraphs:
+                        line = " ".join([run.text for run in para.runs if run.text])
+                        if line.strip():
+                            texts.append(line.strip())
+        if texts:
+            return "\n".join(texts).strip()
+    except Exception as e:
+        print(f"python-pptx failed: {e}")
 
+    # 2. Fallback: Raw XML extraction from .pptx zip
     try:
         text = ""
         with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
-            slide_files = [f for f in z.namelist() if f.startswith('ppt/slides/slide') and f.endswith('.xml')]
-            for sf in sorted(slide_files):
+            slide_files = sorted([f for f in z.namelist() if f.startswith('ppt/slides/slide') and f.endswith('.xml')])
+            for sf in slide_files:
                 xml_content = z.read(sf)
                 tree = ET.fromstring(xml_content)
-                texts = [node.text for node in tree.iter() if node.text and len(node.text.strip()) > 1]
-                if texts:
-                    text += " ".join(texts) + "\n"
-        return text.strip()
+                ns = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
+                for elem in tree.iter(f'{ns}t'):
+                    if elem.text and elem.text.strip():
+                        text += elem.text.strip() + " "
+        if text.strip():
+            return text.strip()
     except Exception:
         pass
 
@@ -618,13 +646,42 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
     try:
         file_bytes = await file.read()
         extracted_text = extract_document_content(file.filename, file_bytes)
-    except Exception:
+    except Exception as ex:
+        print(f"File read error in summarize: {ex}")
         extracted_text = ""
+        file_bytes = b""
 
-    if not extracted_text or len(extracted_text.strip()) < 10:
-        extracted_text = f"Document File: {file.filename}\nThis document contains academic study materials, notes, and textbook content."
+    # If extraction failed completely, raise a clear error
+    extraction_failed = not extracted_text or len(extracted_text.strip()) < 30
+    
+    if extraction_failed:
+        # Last resort: send file bytes as base64 to Groq with OCR-style prompt
+        try:
+            b64_content = base64.b64encode(file_bytes[:200000]).decode('utf-8')
+            raw_prompt = (
+                f"The following is a base64-encoded document file named '{file.filename}'. "
+                "Please decode and extract the readable text content from it, then summarize it academically.\n\n"
+                f"Base64 Data (first 200KB):\n{b64_content[:5000]}"
+            )
+            extracted_text = call_groq_api(raw_prompt)
+            if not extracted_text or extracted_text == "ERROR":
+                extracted_text = ""
+        except Exception:
+            extracted_text = ""
 
-    truncated_text = extracted_text[:10000]
+    # If still empty, return a meaningful error to the user
+    if not extracted_text or len(extracted_text.strip()) < 15:
+        return {"response": (
+            f"### ⚠️ Document Reading Failed\n\n"
+            f"**File:** {file.filename}\n\n"
+            "The document could not be read. Please make sure:\n"
+            "* The file is not password-protected\n"
+            "* The file is a valid PDF, DOCX, PPTX, or TXT\n"
+            "* The file contains actual readable text (not just scanned images)\n\n"
+            "Try uploading a different version of the document."
+        )}
+
+    truncated_text = extracted_text[:12000]
 
     system_prompt = (
         "You are a World-Class Academic Professor and Master Document Summarizer.\n"
@@ -645,7 +702,7 @@ async def summarize(file: UploadFile = File(...), email: str = Form("guest@gmail
     full_prompt = f"{system_prompt}\n\nPlease thoroughly analyze and summarize the educational content of this document ({file.filename}):\n\n{truncated_text}"
     ai_res = get_fallback_ai_response(messages, prompt_text=full_prompt)
     
-    if not ai_res or ai_res == "ERROR" or "AI Assistant is active" in ai_res:
+    if not ai_res or ai_res == "ERROR":
         lines = [l.strip() for l in truncated_text.split('\n') if len(l.strip()) > 15]
         bullets = "\n".join([f"* {line}" for line in lines[:10]]) if lines else f"* Document {file.filename} contains key academic notes and study materials."
         ai_res = f"### 📄 Document Summary ({file.filename})\n\n**Core Subject Matter & Takeaways:**\n{bullets}\n\n* **Overview**: The document provides structured information for study and revision."
@@ -714,13 +771,40 @@ async def multi_upload_explain(
     try:
         file_bytes = await file.read()
         extracted_text = extract_document_content(file.filename, file_bytes)
-    except Exception:
+    except Exception as ex:
+        print(f"File read error in multi-upload: {ex}")
         extracted_text = ""
+        file_bytes = b""
 
-    if not extracted_text or len(extracted_text.strip()) < 10:
-        extracted_text = f"Document File: {file.filename}\nThis document contains academic study materials."
+    extraction_failed = not extracted_text or len(extracted_text.strip()) < 30
 
-    truncated_text = extracted_text[:10000]
+    if extraction_failed:
+        # Last resort: base64 decode attempt
+        try:
+            b64_content = base64.b64encode(file_bytes[:200000]).decode('utf-8')
+            raw_prompt = (
+                f"The following is a base64-encoded file named '{file.filename}'. "
+                "Extract the readable text and provide a detailed academic explanation of its content.\n\n"
+                f"Base64 sample:\n{b64_content[:5000]}"
+            )
+            extracted_text = call_groq_api(raw_prompt)
+            if not extracted_text or extracted_text == "ERROR":
+                extracted_text = ""
+        except Exception:
+            extracted_text = ""
+
+    if not extracted_text or len(extracted_text.strip()) < 15:
+        return {"explanation": (
+            f"### ⚠️ Document Reading Failed\n\n"
+            f"**File:** {file.filename}\n\n"
+            "The document could not be read. Please make sure:\n"
+            "* The file is not password-protected\n"
+            "* The file is a valid PDF, DOCX, PPTX, or TXT\n"
+            "* The file contains actual readable text (not just scanned images)\n\n"
+            "Try uploading a different version of the document."
+        )}
+
+    truncated_text = extracted_text[:12000]
 
     system_prompt = (
         "You are an advanced AI Academic Assistant specializing in detailed document analysis.\n"
@@ -734,12 +818,12 @@ async def multi_upload_explain(
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Analyze and explain the following document subject matter in plain, clear prose:\n\n{truncated_text}"}
+        {"role": "user", "content": f"Analyze and explain the following document content in detail:\n\n{truncated_text}"}
     ]
     
     ai_explanation = get_fallback_ai_response(messages, prompt_text=f"{system_prompt}\n\nExplain:\n{truncated_text}")
     
-    if not ai_explanation or ai_explanation == "ERROR" or "AI Assistant is active" in ai_explanation:
+    if not ai_explanation or ai_explanation == "ERROR":
         lines = [l.strip() for l in truncated_text.split('\n') if len(l.strip()) > 15]
         bullets = "\n".join([f"* {line}" for line in lines[:8]]) if lines else f"* Detailed analysis of {file.filename}"
         ai_explanation = f"### 📚 Academic Analysis ({file.filename})\n\n**Core Findings & Analysis:**\n{bullets}"

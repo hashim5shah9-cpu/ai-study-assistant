@@ -7,3 +7,7 @@ groq
 pymysql
 pg8000
 mangum
+pypdf
+pdfminer.six
+python-docx
+python-pptx
